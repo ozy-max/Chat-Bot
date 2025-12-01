@@ -1,3 +1,13 @@
 <resources>
-    <string name="app_name">Chat Bot</string>
+    <string name="app_name">Claude AI Чат-бот</string>
+    <string name="chat_title">Claude AI Чат-бот</string>
+    <string name="message_hint">Введите сообщение…</string>
+    <string name="send_button">➤</string>
+    <string name="api_key_dialog_title">Введите Claude API ключ</string>
+    <string name="api_key_hint">sk-ant-…</string>
+    <string name="save">Сохранить</string>
+    <string name="cancel">Отмена</string>
+    <string name="api_key_updated">API ключ обновлен</string>
+    <string name="error_prefix">Ошибка: </string>
+    <string name="tools_used">🔧 Использованные инструменты:</string>
 </resources>

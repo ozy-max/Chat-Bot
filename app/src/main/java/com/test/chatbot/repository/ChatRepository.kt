@@ -1,7 +1,10 @@
 package com.test.chatbot.repository
 
 import com.test.chatbot.api.RetrofitClient
-import com.test.chatbot.models.*
+import com.test.chatbot.models.ClaudeMessage
+import com.test.chatbot.models.ClaudeRequest
+import com.test.chatbot.models.ClaudeResponse
+import com.test.chatbot.utils.ToolsUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -15,7 +18,7 @@ class ChatRepository {
         try {
             val request = ClaudeRequest(
                 messages = conversationHistory,
-                tools = null
+                tools = ToolsUtils.tools
             )
             
             val response = apiService.sendMessage(apiKey, request = request)
@@ -28,5 +31,9 @@ class ChatRepository {
         } catch (e: Exception) {
             Result.failure(e)
         }
+    }
+    
+    fun executeToolCall(toolName: String, input: Map<String, Any>): String {
+        return ToolsUtils.executeToolCall(toolName, input)
     }
 }

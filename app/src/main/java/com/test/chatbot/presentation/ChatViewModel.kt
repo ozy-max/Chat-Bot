@@ -70,30 +70,88 @@ class ChatViewModel(
         }
     }
     
-    private fun handleClaudeResponse(response: ClaudeResponse) {
-        // Получаем текстовый ответ
-        val textResponse = response.content
-            .filter { it.type == "text" }
-            .joinToString("") { it.text ?: "" }
+    private suspend fun handleClaudeResponse(response: ClaudeResponse) {
+        val toolCalls = mutableListOf<ToolCall>()
+        var textResponse = ""
+        var needsToolExecution = false
+        
+        // Обрабатываем блоки контента
+        for (block in response.content) {
+            when (block.type) {
+                "text" -> {
+                    textResponse += block.text ?: ""
+                }
+                "tool_use" -> {
+                    needsToolExecution = true
+                    val toolName = block.name ?: ""
+                    val input = block.input ?: emptyMap()
+                    val toolUseId = block.id ?: ""
+                    
+                    // Выполняем инструмент
+                    val result = repository.executeToolCall(toolName, input)
+                    
+                    toolCalls.add(ToolCall(
+                        toolName = toolName,
+                        input = input,
+                        result = result
+                    ))
+                }
+            }
+        }
         
         // Добавляем ответ ассистента в историю
         conversationHistory.add(ClaudeMessage(
             role = "assistant",
-            content = textResponse
+            content = response.content.map { block ->
+                when (block.type) {
+                    "text" -> mapOf("type" to "text", "text" to (block.text ?: ""))
+                    "tool_use" -> mapOf(
+                        "type" to "tool_use",
+                        "id" to (block.id ?: ""),
+                        "name" to (block.name ?: ""),
+                        "input" to (block.input ?: emptyMap<String, Any>())
+                    )
+                    else -> emptyMap()
+                }
+            }
         ))
         
-        // Отображаем ответ
-        val botMessage = Message(
-            text = textResponse.ifEmpty { "Получен пустой ответ" },
-            isUser = false,
-            toolCalls = null
-        )
-        
-        _uiState.update { 
-            it.copy(
-                messages = it.messages + botMessage,
-                isLoading = false
-            ) 
+        if (needsToolExecution) {
+            // Добавляем результаты выполнения инструментов в историю
+            val toolResults = toolCalls.map { toolCall ->
+                val toolUseBlock = response.content.find { 
+                    it.type == "tool_use" && it.name == toolCall.toolName 
+                }
+                
+                mapOf(
+                    "type" to "tool_result",
+                    "tool_use_id" to (toolUseBlock?.id ?: ""),
+                    "content" to (toolCall.result ?: "")
+                )
+            }
+            
+            conversationHistory.add(ClaudeMessage(
+                role = "user",
+                content = toolResults
+            ))
+            
+            // Отправляем повторный запрос для получения финального ответа
+            // (без промежуточного сообщения)
+            sendRequestToClaude()
+        } else {
+            // Это финальный ответ
+            val botMessage = Message(
+                text = textResponse.ifEmpty { "Получен пустой ответ" },
+                isUser = false,
+                toolCalls = if (toolCalls.isNotEmpty()) toolCalls else null
+            )
+            
+            _uiState.update { 
+                it.copy(
+                    messages = it.messages + botMessage,
+                    isLoading = false
+                ) 
+            }
         }
     }
     

@@ -7,5 +7,5 @@ data class ChatUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val showApiKeyDialog: Boolean = true,
-    val apiKey: String = "INPUT_YOUR_API_KEY_HERE"
+    val apiKey: String = ""
 )

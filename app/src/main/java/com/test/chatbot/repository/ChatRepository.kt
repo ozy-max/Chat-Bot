@@ -4,6 +4,7 @@ import com.test.chatbot.api.RetrofitClient
 import com.test.chatbot.models.ClaudeMessage
 import com.test.chatbot.models.ClaudeRequest
 import com.test.chatbot.models.ClaudeResponse
+import com.test.chatbot.utils.SystemPrompts
 import com.test.chatbot.utils.ToolsUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,6 +18,7 @@ class ChatRepository {
     ): Result<ClaudeResponse> = withContext(Dispatchers.IO) {
         try {
             val request = ClaudeRequest(
+                system = SystemPrompts.TZ_COLLECTOR,
                 messages = conversationHistory,
                 tools = ToolsUtils.tools
             )

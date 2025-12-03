@@ -5,9 +5,10 @@ import com.google.gson.annotations.SerializedName
 // Запрос к Claude API
 data class ClaudeRequest(
     val model: String = "claude-sonnet-4-20250514",
+    val system: String? = null,
     val messages: List<ClaudeMessage>,
     @SerializedName("max_tokens")
-    val maxTokens: Int = 1024,
+    val maxTokens: Int = 4096,
     val tools: List<Tool>? = null
 )
 

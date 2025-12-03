@@ -18,7 +18,7 @@ class ChatRepository {
     ): Result<ClaudeResponse> = withContext(Dispatchers.IO) {
         try {
             val request = ClaudeRequest(
-                system = SystemPrompts.TZ_COLLECTOR,
+                system = SystemPrompts.UNIVERSAL_AGENT,
                 messages = conversationHistory,
                 tools = ToolsUtils.tools
             )

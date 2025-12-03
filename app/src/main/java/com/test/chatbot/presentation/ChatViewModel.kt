@@ -26,7 +26,13 @@ class ChatViewModel(
             is ChatUiEvents.ShowApiKeyDialog -> showApiKeyDialog()
             is ChatUiEvents.DismissApiKeyDialog -> dismissApiKeyDialog()
             is ChatUiEvents.DismissError -> dismissError()
+            is ChatUiEvents.ClearChat -> clearChat()
         }
+    }
+    
+    private fun clearChat() {
+        conversationHistory.clear()
+        _uiState.update { it.copy(messages = emptyList()) }
     }
     
     private fun sendMessage(userMessage: String) {

@@ -6,5 +6,6 @@ sealed interface ChatUiEvents {
     data object ShowApiKeyDialog : ChatUiEvents
     data object DismissApiKeyDialog : ChatUiEvents
     data object DismissError : ChatUiEvents
+    data object ClearChat : ChatUiEvents
 }
 

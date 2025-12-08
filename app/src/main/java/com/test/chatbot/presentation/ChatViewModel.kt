@@ -2,7 +2,10 @@ package com.test.chatbot.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.test.chatbot.models.*
+import com.test.chatbot.models.ClaudeMessage
+import com.test.chatbot.models.ClaudeResponse
+import com.test.chatbot.models.Message
+import com.test.chatbot.models.ToolCall
 import com.test.chatbot.repository.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,8 +26,11 @@ class ChatViewModel(
         when (event) {
             is ChatUiEvents.SendMessage -> sendMessage(event.message)
             is ChatUiEvents.UpdateApiKey -> updateApiKey(event.apiKey)
+            is ChatUiEvents.UpdateTemperature -> updateTemperature(event.temperature)
             is ChatUiEvents.ShowApiKeyDialog -> showApiKeyDialog()
             is ChatUiEvents.DismissApiKeyDialog -> dismissApiKeyDialog()
+            is ChatUiEvents.ShowSettingsDialog -> showSettingsDialog()
+            is ChatUiEvents.DismissSettingsDialog -> dismissSettingsDialog()
             is ChatUiEvents.DismissError -> dismissError()
             is ChatUiEvents.ClearChat -> clearChat()
         }
@@ -33,6 +39,18 @@ class ChatViewModel(
     private fun clearChat() {
         conversationHistory.clear()
         _uiState.update { it.copy(messages = emptyList()) }
+    }
+    
+    private fun updateTemperature(temperature: Double) {
+        _uiState.update { it.copy(temperature = temperature) }
+    }
+    
+    private fun showSettingsDialog() {
+        _uiState.update { it.copy(showSettingsDialog = true) }
+    }
+    
+    private fun dismissSettingsDialog() {
+        _uiState.update { it.copy(showSettingsDialog = false) }
     }
     
     private fun sendMessage(userMessage: String) {
@@ -62,7 +80,11 @@ class ChatViewModel(
     }
     
     private suspend fun sendRequestToClaude() {
-        val result = repository.sendMessage(_uiState.value.apiKey, conversationHistory)
+        val result = repository.sendMessage(
+            _uiState.value.apiKey, 
+            conversationHistory,
+            _uiState.value.temperature
+        )
         
         result.onSuccess { response ->
             handleClaudeResponse(response)

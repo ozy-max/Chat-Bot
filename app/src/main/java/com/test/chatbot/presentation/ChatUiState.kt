@@ -7,5 +7,7 @@ data class ChatUiState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val showApiKeyDialog: Boolean = true,
-    val apiKey: String = ""
+    val apiKey: String = "",
+    val temperature: Double = 0.7,
+    val showSettingsDialog: Boolean = false
 )

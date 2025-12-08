@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
@@ -19,14 +18,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.test.chatbot.models.Message
 import com.test.chatbot.presentation.components.ApiKeyDialog
 import com.test.chatbot.presentation.components.MessageItem
+import com.test.chatbot.presentation.components.SettingsDialog
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +46,7 @@ fun ChatScreen(
         }
     }
     
+    // Диалог первичного ввода API ключа
     if (uiState.showApiKeyDialog) {
         ApiKeyDialog(
             currentApiKey = uiState.apiKey,
@@ -58,6 +58,16 @@ fun ChatScreen(
         )
     }
     
+    // Диалог настроек (Temperature)
+    if (uiState.showSettingsDialog) {
+        SettingsDialog(
+            currentTemperature = uiState.temperature,
+            onTemperatureChange = { onUiEvent(ChatUiEvents.UpdateTemperature(it)) },
+            onDismiss = { onUiEvent(ChatUiEvents.DismissSettingsDialog) }
+        )
+    }
+    
+    // Диалог ошибки
     uiState.error?.let { error ->
         AlertDialog(
             onDismissRequest = { onUiEvent(ChatUiEvents.DismissError) },
@@ -75,10 +85,24 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    Text(
-                        "Claude AI Чат-бот",
-                        fontWeight = FontWeight.Bold
-                    ) 
+                    Column {
+                        Text(
+                            "Claude AI Чат-бот",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp
+                        )
+                        // Показываем текущую температуру
+                        val tempLabel = when {
+                            uiState.temperature <= 0.3 -> "🧊 ${uiState.temperature}"
+                            uiState.temperature <= 0.8 -> "⚖️ ${uiState.temperature}"
+                            else -> "🔥 ${uiState.temperature}"
+                        }
+                        Text(
+                            text = "Temperature: $tempLabel",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -93,11 +117,11 @@ fun ChatScreen(
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
-                    // Кнопка "Настройки API"
-                    IconButton(onClick = { onUiEvent(ChatUiEvents.ShowApiKeyDialog) }) {
+                    // Кнопка "Настройки"
+                    IconButton(onClick = { onUiEvent(ChatUiEvents.ShowSettingsDialog) }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Настройки API",
+                            contentDescription = "Настройки",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }
@@ -179,7 +203,7 @@ fun ChatScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Send,
+                            imageVector = Icons.AutoMirrored.Filled.Send,
                             contentDescription = "Отправить",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
@@ -189,4 +213,3 @@ fun ChatScreen(
         }
     }
 }
-

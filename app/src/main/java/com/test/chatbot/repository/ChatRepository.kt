@@ -14,12 +14,14 @@ class ChatRepository {
     
     suspend fun sendMessage(
         apiKey: String,
-        conversationHistory: List<ClaudeMessage>
+        conversationHistory: List<ClaudeMessage>,
+        temperature: Double = 0.7
     ): Result<ClaudeResponse> = withContext(Dispatchers.IO) {
         try {
             val request = ClaudeRequest(
                 system = SystemPrompts.UNIVERSAL_AGENT,
                 messages = conversationHistory,
+                temperature = temperature,
                 tools = ToolsUtils.tools
             )
             

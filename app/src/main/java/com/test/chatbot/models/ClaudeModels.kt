@@ -9,6 +9,7 @@ data class ClaudeRequest(
     val messages: List<ClaudeMessage>,
     @SerializedName("max_tokens")
     val maxTokens: Int = 4096,
+    val temperature: Double = 0.7,
     val tools: List<Tool>? = null
 )
 

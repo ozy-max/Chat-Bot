@@ -1,11 +1,9 @@
 package com.test.chatbot.presentation
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.test.chatbot.models.ClaudeMessage
-import com.test.chatbot.models.ClaudeResponse
-import com.test.chatbot.models.Message
-import com.test.chatbot.models.ToolCall
+import com.test.chatbot.models.*
 import com.test.chatbot.repository.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,13 +18,19 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
     
-    private val conversationHistory = mutableListOf<ClaudeMessage>()
+    // История для Claude
+    private val claudeHistory = mutableListOf<ClaudeMessage>()
+    // История для YandexGPT
+    private val yandexHistory = mutableListOf<YandexGptMessage>()
     
     fun onUiEvent(event: ChatUiEvents) {
         when (event) {
             is ChatUiEvents.SendMessage -> sendMessage(event.message)
             is ChatUiEvents.UpdateApiKey -> updateApiKey(event.apiKey)
+            is ChatUiEvents.UpdateYandexApiKey -> updateYandexApiKey(event.apiKey)
+            is ChatUiEvents.UpdateYandexFolderId -> updateYandexFolderId(event.folderId)
             is ChatUiEvents.UpdateTemperature -> updateTemperature(event.temperature)
+            is ChatUiEvents.UpdateProvider -> updateProvider(event.provider)
             is ChatUiEvents.ShowApiKeyDialog -> showApiKeyDialog()
             is ChatUiEvents.DismissApiKeyDialog -> dismissApiKeyDialog()
             is ChatUiEvents.ShowSettingsDialog -> showSettingsDialog()
@@ -36,38 +40,38 @@ class ChatViewModel(
         }
     }
     
-    private fun clearChat() {
-        conversationHistory.clear()
-        _uiState.update { it.copy(messages = emptyList()) }
-    }
-    
-    private fun updateTemperature(temperature: Double) {
-        _uiState.update { it.copy(temperature = temperature) }
-    }
-    
-    private fun showSettingsDialog() {
-        _uiState.update { it.copy(showSettingsDialog = true) }
-    }
-    
-    private fun dismissSettingsDialog() {
-        _uiState.update { it.copy(showSettingsDialog = false) }
-    }
-    
     private fun sendMessage(userMessage: String) {
         if (userMessage.isBlank()) return
         
-        // Добавляем сообщение пользователя
+        // Добавляем сообщение пользователя в UI
         val userMsg = Message(text = userMessage, isUser = true)
         _uiState.update { it.copy(messages = it.messages + userMsg) }
         
-        // Добавляем в историю разговора
-        conversationHistory.add(ClaudeMessage(role = "user", content = userMessage))
+        // Добавляем в историю в зависимости от провайдера
+        when (_uiState.value.selectedProvider) {
+            AiProvider.CLAUDE -> {
+                claudeHistory.add(ClaudeMessage(role = "user", content = userMessage))
+            }
+            AiProvider.YANDEX_GPT -> {
+                // Добавляем системное сообщение если история пуста
+                if (yandexHistory.isEmpty()) {
+                    yandexHistory.add(YandexGptMessage(
+                        role = "system",
+                        text = "Ты — универсальный ИИ-ассистент. Отвечай на русском языке."
+                    ))
+                }
+                yandexHistory.add(YandexGptMessage(role = "user", text = userMessage))
+            }
+        }
         
-        // Отправляем запрос к API
+        // Отправляем запрос
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
             try {
-                sendRequestToClaude()
+                when (_uiState.value.selectedProvider) {
+                    AiProvider.CLAUDE -> sendToClaude()
+                    AiProvider.YANDEX_GPT -> sendToYandexGpt()
+                }
             } catch (e: Exception) {
                 _uiState.update { 
                     it.copy(
@@ -79,112 +83,96 @@ class ChatViewModel(
         }
     }
     
-    private suspend fun sendRequestToClaude() {
-        val result = repository.sendMessage(
-            _uiState.value.apiKey, 
-            conversationHistory,
+    private suspend fun sendToClaude() {
+        val result = repository.sendMessageToClaude(
+            _uiState.value.apiKey,
+            claudeHistory,
             _uiState.value.temperature
         )
         
-        result.onSuccess { response ->
-            handleClaudeResponse(response)
-        }.onFailure { exception ->
-            _uiState.update { 
-                it.copy(
-                    error = "Ошибка API: ${exception.message}",
-                    isLoading = false
-                ) 
-            }
-        }
-    }
-    
-    private suspend fun handleClaudeResponse(response: ClaudeResponse) {
-        val toolCalls = mutableListOf<ToolCall>()
-        var textResponse = ""
-        var needsToolExecution = false
-        
-        // Обрабатываем блоки контента
-        for (block in response.content) {
-            when (block.type) {
-                "text" -> {
-                    textResponse += block.text ?: ""
-                }
-                "tool_use" -> {
-                    needsToolExecution = true
-                    val toolName = block.name ?: ""
-                    val input = block.input ?: emptyMap()
-                    val toolUseId = block.id ?: ""
-                    
-                    // Выполняем инструмент
-                    val result = repository.executeToolCall(toolName, input)
-                    
-                    toolCalls.add(ToolCall(
-                        toolName = toolName,
-                        input = input,
-                        result = result
-                    ))
-                }
-            }
-        }
-        
-        // Добавляем ответ ассистента в историю
-        conversationHistory.add(ClaudeMessage(
-            role = "assistant",
-            content = response.content.map { block ->
-                when (block.type) {
-                    "text" -> mapOf("type" to "text", "text" to (block.text ?: ""))
-                    "tool_use" -> mapOf(
-                        "type" to "tool_use",
-                        "id" to (block.id ?: ""),
-                        "name" to (block.name ?: ""),
-                        "input" to (block.input ?: emptyMap<String, Any>())
-                    )
-                    else -> emptyMap()
-                }
-            }
-        ))
-        
-        if (needsToolExecution) {
-            // Добавляем результаты выполнения инструментов в историю
-            val toolResults = toolCalls.map { toolCall ->
-                val toolUseBlock = response.content.find { 
-                    it.type == "tool_use" && it.name == toolCall.toolName 
-                }
-                
-                mapOf(
-                    "type" to "tool_result",
-                    "tool_use_id" to (toolUseBlock?.id ?: ""),
-                    "content" to (toolCall.result ?: "")
-                )
-            }
+        result.onSuccess { textResponse ->
+            // Добавляем в историю
+            claudeHistory.add(ClaudeMessage(role = "assistant", content = textResponse))
             
-            conversationHistory.add(ClaudeMessage(
-                role = "user",
-                content = toolResults
-            ))
-            
-            // Отправляем повторный запрос для получения финального ответа
-            // (без промежуточного сообщения)
-            sendRequestToClaude()
-        } else {
-            // Это финальный ответ
+            // Показываем ответ
             val botMessage = Message(
                 text = textResponse.ifEmpty { "Получен пустой ответ" },
-                isUser = false,
-                toolCalls = if (toolCalls.isNotEmpty()) toolCalls else null
+                isUser = false
             )
-            
             _uiState.update { 
                 it.copy(
                     messages = it.messages + botMessage,
                     isLoading = false
                 ) 
             }
+        }.onFailure { exception ->
+            _uiState.update { 
+                it.copy(
+                    error = "Ошибка Claude: ${exception.message}",
+                    isLoading = false
+                ) 
+            }
         }
     }
     
-    private fun updateApiKey(newKey: String) {
-        _uiState.update { it.copy(apiKey = newKey) }
+    private suspend fun sendToYandexGpt() {
+        val result = repository.sendMessageToYandexGpt(
+            _uiState.value.yandexApiKey,
+            _uiState.value.yandexFolderId,
+            yandexHistory,
+            _uiState.value.temperature
+        )
+        
+        result.onSuccess { textResponse ->
+            // Добавляем в историю
+            yandexHistory.add(YandexGptMessage(role = "assistant", text = textResponse))
+            
+            // Показываем ответ
+            val botMessage = Message(
+                text = textResponse.ifEmpty { "Получен пустой ответ" },
+                isUser = false
+            )
+            _uiState.update { 
+                it.copy(
+                    messages = it.messages + botMessage,
+                    isLoading = false
+                ) 
+            }
+        }.onFailure { exception ->
+            _uiState.update { 
+                it.copy(
+                    error = "Ошибка YandexGPT: ${exception.message}",
+                    isLoading = false
+                ) 
+            }
+        }
+    }
+    
+    private fun clearChat() {
+        claudeHistory.clear()
+        yandexHistory.clear()
+        _uiState.update { it.copy(messages = emptyList()) }
+    }
+    
+    private fun updateTemperature(temperature: Double) {
+        Log.d("###########","updateTemperature: $temperature")
+        _uiState.update { it.copy(temperature = temperature) }
+    }
+    
+    private fun updateApiKey(apiKey: String) {
+        _uiState.update { it.copy(apiKey = apiKey) }
+    }
+    
+    private fun updateYandexApiKey(apiKey: String) {
+        _uiState.update { it.copy(yandexApiKey = apiKey) }
+    }
+    
+    private fun updateYandexFolderId(folderId: String) {
+        _uiState.update { it.copy(yandexFolderId = folderId) }
+    }
+    
+    private fun updateProvider(provider: AiProvider) {
+        _uiState.update { it.copy(selectedProvider = provider) }
     }
     
     private fun showApiKeyDialog() {
@@ -193,6 +181,14 @@ class ChatViewModel(
     
     private fun dismissApiKeyDialog() {
         _uiState.update { it.copy(showApiKeyDialog = false) }
+    }
+    
+    private fun showSettingsDialog() {
+        _uiState.update { it.copy(showSettingsDialog = true) }
+    }
+    
+    private fun dismissSettingsDialog() {
+        _uiState.update { it.copy(showSettingsDialog = false) }
     }
     
     private fun dismissError() {

@@ -8,16 +8,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.test.chatbot.models.AiProvider
 import kotlin.math.roundToInt
 
 @Composable
 fun SettingsDialog(
     currentTemperature: Double,
+    currentProvider: AiProvider,
     onTemperatureChange: (Double) -> Unit,
+    onProviderChange: (AiProvider) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var temperature by remember { mutableFloatStateOf(currentTemperature.toFloat()) }
+    var selectedProvider by remember { mutableStateOf(currentProvider) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -27,6 +31,31 @@ fun SettingsDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Секция выбора модели
+                Text(
+                    text = "🤖 AI Модель",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp
+                )
+                
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    FilterChip(
+                        selected = selectedProvider == AiProvider.CLAUDE,
+                        onClick = { selectedProvider = AiProvider.CLAUDE },
+                        label = { Text("Claude") }
+                    )
+                    FilterChip(
+                        selected = selectedProvider == AiProvider.YANDEX_GPT,
+                        onClick = { selectedProvider = AiProvider.YANDEX_GPT },
+                        label = { Text("YandexGPT") }
+                    )
+                }
+                
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                
                 // Секция Temperature
                 Text(
                     text = "🌡️ Temperature",
@@ -47,7 +76,7 @@ fun SettingsDialog(
                     color = MaterialTheme.colorScheme.primary
                 )
                 
-                // Слайдер (Claude API поддерживает 0.0 - 1.0)
+                // Слайдер
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.fillMaxWidth()
@@ -103,9 +132,9 @@ fun SettingsDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    // Округляем до 1 знака после запятой
                     val roundedTemp = (temperature * 10).toInt() / 10.0
                     onTemperatureChange(roundedTemp)
+                    onProviderChange(selectedProvider)
                     onDismiss()
                 }
             ) {
@@ -120,4 +149,3 @@ fun SettingsDialog(
         modifier = modifier
     )
 }
-

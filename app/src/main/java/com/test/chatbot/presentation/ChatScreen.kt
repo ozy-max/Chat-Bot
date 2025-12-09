@@ -10,8 +10,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,11 +21,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.test.chatbot.models.AiProvider
 import com.test.chatbot.presentation.components.ApiKeyDialog
 import com.test.chatbot.presentation.components.MessageItem
 import com.test.chatbot.presentation.components.SettingsDialog
 import kotlinx.coroutines.launch
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -46,23 +46,30 @@ fun ChatScreen(
         }
     }
     
-    // Диалог первичного ввода API ключа
+    // Диалог ввода API ключей
     if (uiState.showApiKeyDialog) {
         ApiKeyDialog(
             currentApiKey = uiState.apiKey,
-            onDismiss = { onUiEvent(ChatUiEvents.DismissApiKeyDialog) },
-            onSave = { newKey -> 
-                onUiEvent(ChatUiEvents.UpdateApiKey(newKey))
+            currentYandexApiKey = uiState.yandexApiKey,
+            currentYandexFolderId = uiState.yandexFolderId,
+            selectedProvider = uiState.selectedProvider,
+            onSave = { claudeKey, yandexKey, yandexFolderId ->
+                onUiEvent(ChatUiEvents.UpdateApiKey(claudeKey))
+                onUiEvent(ChatUiEvents.UpdateYandexApiKey(yandexKey))
+                onUiEvent(ChatUiEvents.UpdateYandexFolderId(yandexFolderId))
                 onUiEvent(ChatUiEvents.DismissApiKeyDialog)
-            }
+            },
+            onDismiss = { onUiEvent(ChatUiEvents.DismissApiKeyDialog) }
         )
     }
     
-    // Диалог настроек (Temperature)
+    // Диалог настроек (Temperature + Provider)
     if (uiState.showSettingsDialog) {
         SettingsDialog(
             currentTemperature = uiState.temperature,
+            currentProvider = uiState.selectedProvider,
             onTemperatureChange = { onUiEvent(ChatUiEvents.UpdateTemperature(it)) },
+            onProviderChange = { onUiEvent(ChatUiEvents.UpdateProvider(it)) },
             onDismiss = { onUiEvent(ChatUiEvents.DismissSettingsDialog) }
         )
     }
@@ -87,18 +94,22 @@ fun ChatScreen(
                 title = { 
                     Column {
                         Text(
-                            "Claude AI Чат-бот",
+                            "AI Чат-бот",
                             fontWeight = FontWeight.Bold,
                             fontSize = 18.sp
                         )
-                        // Показываем текущую температуру
-                        val tempLabel = when {
-                            uiState.temperature <= 0.3 -> "🧊 ${uiState.temperature}"
-                            uiState.temperature <= 0.8 -> "⚖️ ${uiState.temperature}"
-                            else -> "🔥 ${uiState.temperature}"
+                        // Показываем текущую модель и температуру
+                        val providerIcon = when (uiState.selectedProvider) {
+                            AiProvider.CLAUDE -> "🟣"
+                            AiProvider.YANDEX_GPT -> "🔴"
+                        }
+                        val tempIcon = when {
+                            uiState.temperature <= 0.3 -> "🧊"
+                            uiState.temperature <= 0.7 -> "⚖️"
+                            else -> "🔥"
                         }
                         Text(
-                            text = "Temperature: $tempLabel",
+                            text = "$providerIcon ${uiState.selectedProvider.displayName} | $tempIcon ${uiState.temperature}",
                             fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f)
                         )
@@ -114,6 +125,14 @@ fun ChatScreen(
                         Icon(
                             imageVector = Icons.Default.Refresh,
                             contentDescription = "Новый чат",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
+                    // Кнопка "API ключи"
+                    IconButton(onClick = { onUiEvent(ChatUiEvents.ShowApiKeyDialog) }) {
+                        Icon(
+                            imageVector = Icons.Default.Key,
+                            contentDescription = "API ключи",
                             tint = MaterialTheme.colorScheme.onPrimary
                         )
                     }

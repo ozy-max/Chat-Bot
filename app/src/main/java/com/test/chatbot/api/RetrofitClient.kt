@@ -7,7 +7,8 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
-    private const val BASE_URL = "https://api.anthropic.com/"
+    private const val CLAUDE_BASE_URL = "https://api.anthropic.com/"
+    private const val YANDEX_BASE_URL = "https://llm.api.cloud.yandex.net/"
     
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
@@ -15,17 +16,27 @@ object RetrofitClient {
     
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .writeTimeout(60, TimeUnit.SECONDS)
         .build()
     
-    private val retrofit = Retrofit.Builder()
-        .baseUrl(BASE_URL)
+    // Claude API
+    private val claudeRetrofit = Retrofit.Builder()
+        .baseUrl(CLAUDE_BASE_URL)
         .client(okHttpClient)
         .addConverterFactory(GsonConverterFactory.create())
         .build()
     
-    val claudeApiService: ClaudeApiService = retrofit.create(ClaudeApiService::class.java)
+    val claudeApiService: ClaudeApiService = claudeRetrofit.create(ClaudeApiService::class.java)
+    
+    // YandexGPT API
+    private val yandexRetrofit = Retrofit.Builder()
+        .baseUrl(YANDEX_BASE_URL)
+        .client(okHttpClient)
+        .addConverterFactory(GsonConverterFactory.create())
+        .build()
+    
+    val yandexGptApiService: YandexGptApiService = yandexRetrofit.create(YandexGptApiService::class.java)
 }
 

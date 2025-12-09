@@ -15,5 +15,11 @@ sealed interface ChatUiEvents {
     data object DismissSettingsDialog : ChatUiEvents
     data object DismissError : ChatUiEvents
     data object ClearChat : ChatUiEvents
+    
+    // События для сравнения моделей
+    data class CompareModels(val query: String) : ChatUiEvents
+    data object ShowComparisonDialog : ChatUiEvents
+    data object DismissComparisonDialog : ChatUiEvents
+    data object ClearComparisonResult : ChatUiEvents
 }
 

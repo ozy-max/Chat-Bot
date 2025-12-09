@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
@@ -23,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.test.chatbot.models.AiProvider
 import com.test.chatbot.presentation.components.ApiKeyDialog
+import com.test.chatbot.presentation.components.ComparisonDialog
 import com.test.chatbot.presentation.components.MessageItem
 import com.test.chatbot.presentation.components.SettingsDialog
 import kotlinx.coroutines.launch
@@ -74,6 +76,17 @@ fun ChatScreen(
         )
     }
     
+    // Диалог сравнения моделей
+    if (uiState.showComparisonDialog) {
+        ComparisonDialog(
+            isComparing = uiState.isComparing,
+            comparisonResult = uiState.comparisonResult,
+            onDismiss = { onUiEvent(ChatUiEvents.DismissComparisonDialog) },
+            onCompare = { query -> onUiEvent(ChatUiEvents.CompareModels(query)) },
+            onClearResult = { onUiEvent(ChatUiEvents.ClearComparisonResult) }
+        )
+    }
+    
     // Диалог ошибки
     uiState.error?.let { error ->
         AlertDialog(
@@ -120,6 +133,14 @@ fun ChatScreen(
                     titleContentColor = MaterialTheme.colorScheme.onPrimary
                 ),
                 actions = {
+                    // Кнопка "Сравнить модели"
+                    IconButton(onClick = { onUiEvent(ChatUiEvents.ShowComparisonDialog) }) {
+                        Icon(
+                            imageVector = Icons.Default.Compare,
+                            contentDescription = "Сравнить модели",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                     // Кнопка "Новый чат"
                     IconButton(onClick = { onUiEvent(ChatUiEvents.ClearChat) }) {
                         Icon(

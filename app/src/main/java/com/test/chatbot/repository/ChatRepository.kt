@@ -13,16 +13,18 @@ class ChatRepository {
     private val claudeApiService = RetrofitClient.claudeApiService
     private val yandexApiService = RetrofitClient.yandexGptApiService
     
-    // Отправка сообщения в Claude
+    // Отправка сообщения в Claude с информацией о токенах
     suspend fun sendMessageToClaude(
         apiKey: String,
         conversationHistory: List<ClaudeMessage>,
-        temperature: Double = 0.7
-    ): Result<String> = withContext(Dispatchers.IO) {
+        temperature: Double = 0.7,
+        maxTokens: Int = 4096
+    ): Result<ApiResponseWithTokens> = withContext(Dispatchers.IO) {
         try {
             val request = ClaudeRequest(
                 system = SystemPrompts.UNIVERSAL_AGENT,
                 messages = conversationHistory,
+                maxTokens = maxTokens,
                 temperature = temperature,
                 tools = ToolsUtils.tools
             )
@@ -30,10 +32,17 @@ class ChatRepository {
             val response = claudeApiService.sendMessage(apiKey, request = request)
             
             if (response.isSuccessful && response.body() != null) {
-                val textResponse = response.body()!!.content
+                val body = response.body()!!
+                val textResponse = body.content
                     .filter { it.type == "text" }
                     .joinToString("") { it.text ?: "" }
-                Result.success(textResponse)
+                
+                Result.success(ApiResponseWithTokens(
+                    text = textResponse,
+                    inputTokens = body.usage.inputTokens,
+                    outputTokens = body.usage.outputTokens,
+                    stopReason = body.stopReason
+                ))
             } else {
                 Result.failure(Exception("Claude API error: ${response.code()} - ${response.message()}"))
             }
@@ -42,20 +51,21 @@ class ChatRepository {
         }
     }
     
-    // Отправка сообщения в YandexGPT
+    // Отправка сообщения в YandexGPT с информацией о токенах
     suspend fun sendMessageToYandexGpt(
         apiKey: String,
         folderId: String,
         messages: List<YandexGptMessage>,
-        temperature: Double = 0.7
-    ): Result<String> = withContext(Dispatchers.IO) {
+        temperature: Double = 0.7,
+        maxTokens: Int = 2000
+    ): Result<ApiResponseWithTokens> = withContext(Dispatchers.IO) {
         try {
             val request = YandexGptRequest(
                 modelUri = "gpt://$folderId/yandexgpt-lite",
                 completionOptions = CompletionOptions(
                     stream = false,
                     temperature = temperature,
-                    maxTokens = "2000"
+                    maxTokens = maxTokens.toString()
                 ),
                 messages = messages
             )
@@ -66,9 +76,17 @@ class ChatRepository {
             )
             
             if (response.isSuccessful && response.body() != null) {
-                val textResponse = response.body()!!.result.alternatives
+                val body = response.body()!!
+                val textResponse = body.result.alternatives
                     .firstOrNull()?.message?.text ?: ""
-                Result.success(textResponse)
+                val usage = body.result.usage
+                
+                Result.success(ApiResponseWithTokens(
+                    text = textResponse,
+                    inputTokens = usage?.inputTextTokens?.toIntOrNull() ?: estimateTokens(messages.joinToString { it.text }),
+                    outputTokens = usage?.completionTokens?.toIntOrNull() ?: estimateTokens(textResponse),
+                    stopReason = body.result.alternatives.firstOrNull()?.status
+                ))
             } else {
                 Result.failure(Exception("YandexGPT API error: ${response.code()} - ${response.message()}"))
             }

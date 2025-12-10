@@ -50,6 +50,7 @@ class ChatViewModel(
                             yandexApiKey = settings.yandexApiKey,
                             yandexFolderId = settings.yandexFolderId,
                             temperature = settings.temperature,
+                            maxTokens = settings.maxTokens,
                             selectedProvider = provider,
                             // Не показываем диалог API ключей если ключи уже сохранены
                             showApiKeyDialog = settings.claudeApiKey.isBlank() && settings.yandexApiKey.isBlank(),
@@ -73,6 +74,7 @@ class ChatViewModel(
             is ChatUiEvents.UpdateYandexApiKey -> updateYandexApiKey(event.apiKey)
             is ChatUiEvents.UpdateYandexFolderId -> updateYandexFolderId(event.folderId)
             is ChatUiEvents.UpdateTemperature -> updateTemperature(event.temperature)
+            is ChatUiEvents.UpdateMaxTokens -> updateMaxTokens(event.maxTokens)
             is ChatUiEvents.UpdateProvider -> updateProvider(event.provider)
             is ChatUiEvents.ShowApiKeyDialog -> showApiKeyDialog()
             is ChatUiEvents.DismissApiKeyDialog -> dismissApiKeyDialog()
@@ -135,22 +137,55 @@ class ChatViewModel(
         val result = repository.sendMessageToClaude(
             _uiState.value.apiKey,
             claudeHistory,
-            _uiState.value.temperature
+            _uiState.value.temperature,
+            _uiState.value.maxTokens
         )
         
-        result.onSuccess { textResponse ->
+        result.onSuccess { response ->
             // Добавляем в историю
-            claudeHistory.add(ClaudeMessage(role = "assistant", content = textResponse))
+            claudeHistory.add(ClaudeMessage(role = "assistant", content = response.text))
             
-            // Показываем ответ
-            val botMessage = Message(
-                text = textResponse.ifEmpty { "Получен пустой ответ" },
-                isUser = false
+            // Обновляем статистику токенов
+            val currentStats = _uiState.value.tokenStats
+            val newStats = currentStats.copy(
+                lastInputTokens = response.inputTokens,
+                lastOutputTokens = response.outputTokens,
+                totalInputTokens = currentStats.totalInputTokens + response.inputTokens,
+                totalOutputTokens = currentStats.totalOutputTokens + response.outputTokens,
+                totalTokens = currentStats.totalTokens + response.inputTokens + response.outputTokens,
+                requestCount = currentStats.requestCount + 1
             )
+            
+            // Проверяем stop_reason
+            val warningMessage = when (response.stopReason) {
+                "max_tokens" -> "\n\n⚠️ Ответ был обрезан из-за достижения лимита токенов"
+                "end_turn" -> null
+                else -> null
+            }
+            
+            // Обновляем последнее сообщение пользователя с токенами
+            val updatedMessages = _uiState.value.messages.toMutableList()
+            val lastUserMessageIndex = updatedMessages.indexOfLast { it.isUser }
+            if (lastUserMessageIndex >= 0) {
+                updatedMessages[lastUserMessageIndex] = updatedMessages[lastUserMessageIndex].copy(
+                    inputTokens = response.inputTokens
+                )
+            }
+            
+            // Показываем ответ с токенами
+            val botMessage = Message(
+                text = (response.text.ifEmpty { "Получен пустой ответ" }) + (warningMessage ?: ""),
+                isUser = false,
+                inputTokens = response.inputTokens,
+                outputTokens = response.outputTokens,
+                provider = AiProvider.CLAUDE
+            )
+            
             _uiState.update { 
                 it.copy(
-                    messages = it.messages + botMessage,
-                    isLoading = false
+                    messages = updatedMessages + botMessage,
+                    isLoading = false,
+                    tokenStats = newStats
                 ) 
             }
         }.onFailure { exception ->
@@ -168,22 +203,54 @@ class ChatViewModel(
             _uiState.value.yandexApiKey,
             _uiState.value.yandexFolderId,
             yandexHistory,
-            _uiState.value.temperature
+            _uiState.value.temperature,
+            _uiState.value.maxTokens
         )
         
-        result.onSuccess { textResponse ->
+        result.onSuccess { response ->
             // Добавляем в историю
-            yandexHistory.add(YandexGptMessage(role = "assistant", text = textResponse))
+            yandexHistory.add(YandexGptMessage(role = "assistant", text = response.text))
             
-            // Показываем ответ
+            // Обновляем статистику токенов
+            val currentStats = _uiState.value.tokenStats
+            val newStats = currentStats.copy(
+                lastInputTokens = response.inputTokens,
+                lastOutputTokens = response.outputTokens,
+                totalInputTokens = currentStats.totalInputTokens + response.inputTokens,
+                totalOutputTokens = currentStats.totalOutputTokens + response.outputTokens,
+                totalTokens = currentStats.totalTokens + response.inputTokens + response.outputTokens,
+                requestCount = currentStats.requestCount + 1
+            )
+            
+            // Обновляем последнее сообщение пользователя с токенами
+            val updatedMessages = _uiState.value.messages.toMutableList()
+            val lastUserMessageIndex = updatedMessages.indexOfLast { it.isUser }
+            if (lastUserMessageIndex >= 0) {
+                updatedMessages[lastUserMessageIndex] = updatedMessages[lastUserMessageIndex].copy(
+                    inputTokens = response.inputTokens
+                )
+            }
+            
+            // Проверяем статус ответа YandexGPT
+            val warningMessage = when (response.stopReason) {
+                "ALTERNATIVE_STATUS_TRUNCATED_FINAL" -> "\n\n⚠️ Ответ был обрезан из-за достижения лимита токенов"
+                "ALTERNATIVE_STATUS_CONTENT_FILTER" -> "\n\n⚠️ Ответ был заблокирован фильтром контента"
+                else -> null
+            }
+            
+            // Показываем ответ с токенами
             val botMessage = Message(
-                text = textResponse.ifEmpty { "Получен пустой ответ" },
-                isUser = false
+                text = (response.text.ifEmpty { "Получен пустой ответ" }) + (warningMessage ?: ""),
+                isUser = false,
+                inputTokens = response.inputTokens,
+                outputTokens = response.outputTokens,
+                provider = AiProvider.YANDEX_GPT
             )
             _uiState.update { 
                 it.copy(
-                    messages = it.messages + botMessage,
-                    isLoading = false
+                    messages = updatedMessages + botMessage,
+                    isLoading = false,
+                    tokenStats = newStats
                 ) 
             }
         }.onFailure { exception ->
@@ -199,7 +266,7 @@ class ChatViewModel(
     private fun clearChat() {
         claudeHistory.clear()
         yandexHistory.clear()
-        _uiState.update { it.copy(messages = emptyList()) }
+        _uiState.update { it.copy(messages = emptyList(), tokenStats = TokenStats()) }
     }
     
     private fun updateTemperature(temperature: Double) {
@@ -208,6 +275,15 @@ class ChatViewModel(
         // Сохраняем в DataStore
         viewModelScope.launch {
             preferencesRepository?.saveTemperature(temperature)
+        }
+    }
+    
+    private fun updateMaxTokens(maxTokens: Int) {
+        Log.d("ChatViewModel","updateMaxTokens: $maxTokens")
+        _uiState.update { it.copy(maxTokens = maxTokens) }
+        // Сохраняем в DataStore
+        viewModelScope.launch {
+            preferencesRepository?.saveMaxTokens(maxTokens)
         }
     }
     

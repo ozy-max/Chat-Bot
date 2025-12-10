@@ -5,11 +5,14 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.*
@@ -17,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +31,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.test.chatbot.models.ModelComparisonResult
 import com.test.chatbot.models.ModelResponse
+import com.test.chatbot.ui.theme.AccentYellow
+import com.test.chatbot.ui.theme.PureBlack
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -44,60 +50,128 @@ fun ComparisonDialog(
     
     Dialog(
         onDismissRequest = onDismiss,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false
-        )
+        properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
+        Box(
             modifier = Modifier
                 .fillMaxWidth(0.95f)
-                .fillMaxHeight(0.9f),
-            shape = RoundedCornerShape(16.dp)
+                .fillMaxHeight(0.92f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(PureBlack)
+                .border(1.dp, AccentYellow.copy(alpha = 0.3f), RoundedCornerShape(20.dp))
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(16.dp)
+                    .padding(20.dp)
             ) {
                 // Заголовок
-                Text(
-                    text = "⚡ Сравнение моделей",
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center
-                )
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(AccentYellow.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Compare,
+                                contentDescription = null,
+                                tint = AccentYellow,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                        Text(
+                            text = "Сравнение",
+                            fontSize = 22.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    
+                    IconButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(Color(0xFF1A1A1A))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Закрыть",
+                            tint = Color.White.copy(alpha = 0.7f),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                // Поле ввода запроса
+                // Разделитель
+                GradientDivider()
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Поле ввода
                 OutlinedTextField(
                     value = queryText,
                     onValueChange = { queryText = it },
-                    label = { Text("Введите запрос для сравнения") },
+                    placeholder = {
+                        Text(
+                            "Введите запрос для сравнения...",
+                            color = Color.White.copy(alpha = 0.3f)
+                        )
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     maxLines = 3,
-                    enabled = !isComparing
+                    enabled = !isComparing,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = AccentYellow,
+                        unfocusedBorderColor = Color(0xFF333333),
+                        focusedContainerColor = Color(0xFF0D0D0D),
+                        unfocusedContainerColor = Color(0xFF0D0D0D),
+                        cursorColor = AccentYellow,
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White
+                    )
                 )
                 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
                 
                 // Кнопка сравнения
                 Button(
                     onClick = { onCompare(queryText) },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = queryText.isNotBlank() && !isComparing
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    enabled = queryText.isNotBlank() && !isComparing,
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentYellow,
+                        contentColor = PureBlack,
+                        disabledContainerColor = AccentYellow.copy(alpha = 0.3f),
+                        disabledContentColor = PureBlack.copy(alpha = 0.5f)
+                    )
                 ) {
                     if (isComparing) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(20.dp),
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = PureBlack,
                             strokeWidth = 2.dp
                         )
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("Сравниваем...")
+                        Text("Сравниваем...", fontWeight = FontWeight.Bold)
                     } else {
-                        Text("🚀 Сравнить модели")
+                        Text("🚀 Сравнить модели", fontWeight = FontWeight.Bold)
                     }
                 }
                 
@@ -105,48 +179,57 @@ fun ComparisonDialog(
                 
                 // Результаты
                 if (comparisonResult != null) {
-                    // Кнопки действий с результатами
+                    // Кнопки действий
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        // Кнопка копирования
                         OutlinedButton(
                             onClick = {
                                 val formattedText = formatComparisonResultForCopy(comparisonResult)
                                 copyToClipboard(context, formattedText)
-                                Toast.makeText(context, "Результаты скопированы!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Скопировано!", Toast.LENGTH_SHORT).show()
                             },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFF00D4FF)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF00D4FF).copy(alpha = 0.5f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.ContentCopy,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Копировать")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Копировать", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                         
-                        // Кнопка сброса
                         OutlinedButton(
                             onClick = onClearResult,
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(40.dp),
+                            shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = MaterialTheme.colorScheme.error
-                            )
+                                contentColor = Color(0xFFF44336)
+                            ),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF44336).copy(alpha = 0.5f))
                         ) {
                             Icon(
                                 imageVector = Icons.Default.DeleteOutline,
                                 contentDescription = null,
-                                modifier = Modifier.size(18.dp)
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Сбросить")
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Сбросить", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
                     
                     Column(
                         modifier = Modifier
@@ -154,40 +237,56 @@ fun ComparisonDialog(
                             .verticalScroll(rememberScrollState())
                     ) {
                         // Запрос
-                        Text(
-                            text = "📝 Запрос:",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp
-                        )
-                        Text(
-                            text = comparisonResult.query,
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(bottom = 12.dp)
-                        )
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(Color(0xFF0D0D0D))
+                                .border(1.dp, Color(0xFF1A1A1A), RoundedCornerShape(10.dp))
+                                .padding(12.dp)
+                        ) {
+                            Column {
+                                Text(
+                                    text = "📝 Запрос",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = AccentYellow
+                                )
+                                Spacer(modifier = Modifier.height(6.dp))
+                                Text(
+                                    text = comparisonResult.query,
+                                    fontSize = 13.sp,
+                                    color = Color.White.copy(alpha = 0.8f)
+                                )
+                            }
+                        }
                         
-                        // Результаты Claude
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Claude результат
                         comparisonResult.claudeResult?.let { claude ->
-                            ModelResultCard(
+                            ModernModelResultCard(
                                 response = claude,
-                                cardColor = Color(0xFF6B5B95)
+                                icon = "🟣",
+                                color = Color(0xFFBB86FC)
                             )
                         }
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        // Результаты YandexGPT
+                        // YandexGPT результат
                         comparisonResult.yandexResult?.let { yandex ->
-                            ModelResultCard(
+                            ModernModelResultCard(
                                 response = yandex,
-                                cardColor = Color(0xFFFF6B35)
+                                icon = "🔴",
+                                color = Color(0xFFFF6B35)
                             )
                         }
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
                         // Сводная таблица
-                        ComparisonSummaryTable(comparisonResult)
+                        ModernComparisonTable(comparisonResult)
                     }
                 } else if (!isComparing) {
                     Box(
@@ -196,40 +295,310 @@ fun ComparisonDialog(
                             .fillMaxWidth(),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = "Введите запрос и нажмите \"Сравнить модели\"\nдля параллельного тестирования Claude и YandexGPT",
-                            textAlign = TextAlign.Center,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "⚡",
+                                fontSize = 48.sp
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "Введите запрос и нажмите\n\"Сравнить модели\"",
+                                textAlign = TextAlign.Center,
+                                fontSize = 14.sp,
+                                color = Color.White.copy(alpha = 0.5f),
+                                lineHeight = 20.sp
+                            )
+                        }
                     }
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Кнопка закрытия
-                TextButton(
-                    onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Закрыть")
                 }
             }
         }
     }
 }
 
-/**
- * Копирование текста в буфер обмена
- */
+@Composable
+private fun GradientDivider() {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(1.dp)
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        Color.Transparent,
+                        AccentYellow.copy(alpha = 0.4f),
+                        Color.Transparent
+                    )
+                )
+            )
+    )
+}
+
+@Composable
+private fun ModernModelResultCard(
+    response: ModelResponse,
+    icon: String,
+    color: Color
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(color.copy(alpha = 0.08f))
+            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(14.dp))
+            .padding(14.dp)
+    ) {
+        Column {
+            // Заголовок
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(text = icon, fontSize = 18.sp)
+                    Text(
+                        text = response.modelName,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = color
+                    )
+                }
+                
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(color.copy(alpha = 0.2f))
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                ) {
+                    Text(
+                        text = "⏱️ ${response.responseTimeMs} мс",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = color
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            if (response.error != null) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFFF44336).copy(alpha = 0.15f))
+                        .padding(10.dp)
+                ) {
+                    Text(
+                        text = "❌ ${response.error}",
+                        color = Color(0xFFF44336),
+                        fontSize = 12.sp
+                    )
+                }
+            } else {
+                // Метрики
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(PureBlack.copy(alpha = 0.5f))
+                        .padding(10.dp),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    MetricBadge("↑", "${response.inputTokens}", Color(0xFF00D4FF))
+                    MetricBadge("↓", "${response.outputTokens}", Color(0xFFBB86FC))
+                    MetricBadge("Σ", "${response.totalTokens}", AccentYellow)
+                    MetricBadge("$", String.format("%.5f", response.estimatedCostUsd), Color(0xFF4CAF50))
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Ответ
+                Text(
+                    text = "Ответ:",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.5f)
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = response.responseText.take(400) + 
+                           if (response.responseText.length > 400) "..." else "",
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.85f),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricBadge(
+    label: String,
+    value: String,
+    color: Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = label,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold,
+            color = color
+        )
+        Text(
+            text = value,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = Color.White.copy(alpha = 0.8f)
+        )
+    }
+}
+
+@Composable
+private fun ModernComparisonTable(result: ModelComparisonResult) {
+    val claude = result.claudeResult
+    val yandex = result.yandexResult
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color(0xFF0D0D0D))
+            .border(1.dp, AccentYellow.copy(alpha = 0.2f), RoundedCornerShape(14.dp))
+            .padding(14.dp)
+    ) {
+        Column {
+            Text(
+                text = "📊 Сводная таблица",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color = AccentYellow
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Заголовки
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Метрика",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.5f),
+                    modifier = Modifier.weight(1.2f)
+                )
+                Text(
+                    "🟣 Claude",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFBB86FC),
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+                Text(
+                    "🔴 Yandex",
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFFF6B35),
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center
+                )
+            }
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(1.dp)
+                    .background(Color(0xFF333333))
+            )
+            
+            Spacer(modifier = Modifier.height(8.dp))
+            
+            // Строки
+            TableRow("⏱️ Время", 
+                claude?.responseTimeMs?.toString() ?: "-",
+                yandex?.responseTimeMs?.toString() ?: "-",
+                (claude?.responseTimeMs ?: Long.MAX_VALUE) < (yandex?.responseTimeMs ?: Long.MAX_VALUE)
+            )
+            TableRow("↑ Вход", 
+                claude?.inputTokens?.toString() ?: "-",
+                yandex?.inputTokens?.toString() ?: "-"
+            )
+            TableRow("↓ Выход", 
+                claude?.outputTokens?.toString() ?: "-",
+                yandex?.outputTokens?.toString() ?: "-"
+            )
+            TableRow("Σ Всего", 
+                claude?.totalTokens?.toString() ?: "-",
+                yandex?.totalTokens?.toString() ?: "-"
+            )
+            TableRow("💰 Цена", 
+                if (claude != null) "$${String.format("%.5f", claude.estimatedCostUsd)}" else "-",
+                if (yandex != null) "$${String.format("%.5f", yandex.estimatedCostUsd)}" else "-",
+                (claude?.estimatedCostUsd ?: Double.MAX_VALUE) < (yandex?.estimatedCostUsd ?: Double.MAX_VALUE)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TableRow(
+    label: String,
+    claudeValue: String,
+    yandexValue: String,
+    claudeWins: Boolean? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            label,
+            fontSize = 12.sp,
+            color = Color.White.copy(alpha = 0.7f),
+            modifier = Modifier.weight(1.2f)
+        )
+        Text(
+            text = claudeValue + if (claudeWins == true) " ✓" else "",
+            fontSize = 12.sp,
+            fontWeight = if (claudeWins == true) FontWeight.Bold else FontWeight.Normal,
+            color = if (claudeWins == true) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.9f),
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Center
+        )
+        Text(
+            text = yandexValue + if (claudeWins == false) " ✓" else "",
+            fontSize = 12.sp,
+            fontWeight = if (claudeWins == false) FontWeight.Bold else FontWeight.Normal,
+            color = if (claudeWins == false) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.9f),
+            modifier = Modifier.weight(1f),
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
 private fun copyToClipboard(context: Context, text: String) {
     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val clip = ClipData.newPlainText("Comparison Result", text)
     clipboard.setPrimaryClip(clip)
 }
 
-/**
- * Форматирование результатов сравнения в текст
- */
 private fun formatComparisonResultForCopy(result: ModelComparisonResult): String {
     val dateFormat = SimpleDateFormat("dd.MM.yyyy HH:mm:ss", Locale.getDefault())
     val timestamp = dateFormat.format(Date(result.timestamp))
@@ -244,7 +613,6 @@ private fun formatComparisonResultForCopy(result: ModelComparisonResult): String
     sb.appendLine(result.query)
     sb.appendLine()
     
-    // Claude результаты
     sb.appendLine("───────────────────────────────────────────────────────")
     sb.appendLine("🟣 CLAUDE SONNET 4")
     sb.appendLine("───────────────────────────────────────────────────────")
@@ -252,12 +620,11 @@ private fun formatComparisonResultForCopy(result: ModelComparisonResult): String
         if (claude.error != null) {
             sb.appendLine("❌ Ошибка: ${claude.error}")
         } else {
-            sb.appendLine("⏱️ Время ответа: ${claude.responseTimeMs} мс")
-            sb.appendLine("📥 Входные токены: ${claude.inputTokens}")
-            sb.appendLine("📤 Выходные токены: ${claude.outputTokens}")
-            sb.appendLine("📊 Всего токенов: ${claude.totalTokens}")
+            sb.appendLine("⏱️ Время: ${claude.responseTimeMs} мс")
+            sb.appendLine("↑ Входные токены: ${claude.inputTokens}")
+            sb.appendLine("↓ Выходные токены: ${claude.outputTokens}")
+            sb.appendLine("Σ Всего токенов: ${claude.totalTokens}")
             sb.appendLine("💰 Стоимость: $${String.format("%.6f", claude.estimatedCostUsd)}")
-            sb.appendLine("📝 Символов в ответе: ${claude.responseText.length}")
             sb.appendLine()
             sb.appendLine("ОТВЕТ:")
             sb.appendLine(claude.responseText)
@@ -265,7 +632,6 @@ private fun formatComparisonResultForCopy(result: ModelComparisonResult): String
     } ?: sb.appendLine("Результат отсутствует")
     sb.appendLine()
     
-    // YandexGPT результаты
     sb.appendLine("───────────────────────────────────────────────────────")
     sb.appendLine("🔴 YANDEXGPT LITE")
     sb.appendLine("───────────────────────────────────────────────────────")
@@ -273,12 +639,11 @@ private fun formatComparisonResultForCopy(result: ModelComparisonResult): String
         if (yandex.error != null) {
             sb.appendLine("❌ Ошибка: ${yandex.error}")
         } else {
-            sb.appendLine("⏱️ Время ответа: ${yandex.responseTimeMs} мс")
-            sb.appendLine("📥 Входные токены: ${yandex.inputTokens}")
-            sb.appendLine("📤 Выходные токены: ${yandex.outputTokens}")
-            sb.appendLine("📊 Всего токенов: ${yandex.totalTokens}")
+            sb.appendLine("⏱️ Время: ${yandex.responseTimeMs} мс")
+            sb.appendLine("↑ Входные токены: ${yandex.inputTokens}")
+            sb.appendLine("↓ Выходные токены: ${yandex.outputTokens}")
+            sb.appendLine("Σ Всего токенов: ${yandex.totalTokens}")
             sb.appendLine("💰 Стоимость: $${String.format("%.6f", yandex.estimatedCostUsd)}")
-            sb.appendLine("📝 Символов в ответе: ${yandex.responseText.length}")
             sb.appendLine()
             sb.appendLine("ОТВЕТ:")
             sb.appendLine(yandex.responseText)
@@ -286,255 +651,7 @@ private fun formatComparisonResultForCopy(result: ModelComparisonResult): String
     } ?: sb.appendLine("Результат отсутствует")
     sb.appendLine()
     
-    // Сводная таблица
-    sb.appendLine("═══════════════════════════════════════════════════════")
-    sb.appendLine("              СВОДНАЯ ТАБЛИЦА")
-    sb.appendLine("═══════════════════════════════════════════════════════")
-    sb.appendLine(String.format("%-20s │ %-15s │ %-15s", "Метрика", "Claude", "YandexGPT"))
-    sb.appendLine("─".repeat(55))
-    
-    val claude = result.claudeResult
-    val yandex = result.yandexResult
-    
-    sb.appendLine(String.format("%-20s │ %-15s │ %-15s", 
-        "Время (мс)", 
-        claude?.responseTimeMs?.toString() ?: "-",
-        yandex?.responseTimeMs?.toString() ?: "-"))
-    
-    sb.appendLine(String.format("%-20s │ %-15s │ %-15s", 
-        "Вход. токены", 
-        claude?.inputTokens?.toString() ?: "-",
-        yandex?.inputTokens?.toString() ?: "-"))
-    
-    sb.appendLine(String.format("%-20s │ %-15s │ %-15s", 
-        "Вых. токены", 
-        claude?.outputTokens?.toString() ?: "-",
-        yandex?.outputTokens?.toString() ?: "-"))
-    
-    sb.appendLine(String.format("%-20s │ %-15s │ %-15s", 
-        "Всего токенов", 
-        claude?.totalTokens?.toString() ?: "-",
-        yandex?.totalTokens?.toString() ?: "-"))
-    
-    sb.appendLine(String.format("%-20s │ %-15s │ %-15s", 
-        "Стоимость ($)", 
-        if (claude != null) String.format("%.6f", claude.estimatedCostUsd) else "-",
-        if (yandex != null) String.format("%.6f", yandex.estimatedCostUsd) else "-"))
-    
-    sb.appendLine(String.format("%-20s │ %-15s │ %-15s", 
-        "Символов", 
-        claude?.responseText?.length?.toString() ?: "-",
-        yandex?.responseText?.length?.toString() ?: "-"))
-    
     sb.appendLine("═══════════════════════════════════════════════════════")
     
     return sb.toString()
 }
-
-@Composable
-private fun ModelResultCard(
-    response: ModelResponse,
-    cardColor: Color
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = cardColor.copy(alpha = 0.1f)
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            // Заголовок модели
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = response.modelName,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = cardColor
-                )
-                
-                // Время ответа
-                Text(
-                    text = "⏱️ ${response.responseTimeMs} мс",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = cardColor
-                )
-            }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Ошибка или ответ
-            if (response.error != null) {
-                Text(
-                    text = "❌ ${response.error}",
-                    color = MaterialTheme.colorScheme.error,
-                    fontSize = 12.sp
-                )
-            } else {
-                // Метрики в строку
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(cardColor.copy(alpha = 0.15f))
-                        .padding(8.dp),
-                    horizontalArrangement = Arrangement.SpaceEvenly
-                ) {
-                    MetricItem("📥", "${response.inputTokens}")
-                    MetricItem("📤", "${response.outputTokens}")
-                    MetricItem("📊", "${response.totalTokens}")
-                    MetricItem("💰", "$${String.format("%.6f", response.estimatedCostUsd)}")
-                }
-                
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Ответ модели
-                Text(
-                    text = "Ответ:",
-                    fontWeight = FontWeight.Medium,
-                    fontSize = 12.sp
-                )
-                Text(
-                    text = response.responseText.take(500) + 
-                           if (response.responseText.length > 500) "..." else "",
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun MetricItem(icon: String, value: String) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = icon, fontSize = 14.sp)
-        Text(
-            text = value,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.Medium
-        )
-    }
-}
-
-@Composable
-private fun ComparisonSummaryTable(result: ModelComparisonResult) {
-    val claude = result.claudeResult
-    val yandex = result.yandexResult
-    
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp)
-        ) {
-            Text(
-                text = "📊 Сводная таблица",
-                fontWeight = FontWeight.Bold,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            // Заголовки
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Метрика", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                Text("Claude", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = Color(0xFF6B5B95))
-                Text("YandexGPT", fontWeight = FontWeight.Bold, fontSize = 11.sp, modifier = Modifier.weight(1f), textAlign = TextAlign.Center, color = Color(0xFFFF6B35))
-            }
-            
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-            
-            // Время ответа
-            SummaryRow(
-                label = "⏱️ Время (мс)",
-                claudeValue = claude?.responseTimeMs?.toString() ?: "-",
-                yandexValue = yandex?.responseTimeMs?.toString() ?: "-",
-                claudeWins = (claude?.responseTimeMs ?: Long.MAX_VALUE) < (yandex?.responseTimeMs ?: Long.MAX_VALUE)
-            )
-            
-            // Входные токены
-            SummaryRow(
-                label = "📥 Вход. токены",
-                claudeValue = claude?.inputTokens?.toString() ?: "-",
-                yandexValue = yandex?.inputTokens?.toString() ?: "-"
-            )
-            
-            // Выходные токены
-            SummaryRow(
-                label = "📤 Вых. токены",
-                claudeValue = claude?.outputTokens?.toString() ?: "-",
-                yandexValue = yandex?.outputTokens?.toString() ?: "-"
-            )
-            
-            // Всего токенов
-            SummaryRow(
-                label = "📊 Всего токенов",
-                claudeValue = claude?.totalTokens?.toString() ?: "-",
-                yandexValue = yandex?.totalTokens?.toString() ?: "-"
-            )
-            
-            // Стоимость
-            SummaryRow(
-                label = "💰 Стоимость",
-                claudeValue = if (claude != null) "$${String.format("%.6f", claude.estimatedCostUsd)}" else "-",
-                yandexValue = if (yandex != null) "$${String.format("%.6f", yandex.estimatedCostUsd)}" else "-",
-                claudeWins = (claude?.estimatedCostUsd ?: Double.MAX_VALUE) < (yandex?.estimatedCostUsd ?: Double.MAX_VALUE)
-            )
-            
-            // Символов в ответе
-            SummaryRow(
-                label = "📝 Символов",
-                claudeValue = claude?.responseText?.length?.toString() ?: "-",
-                yandexValue = yandex?.responseText?.length?.toString() ?: "-"
-            )
-        }
-    }
-}
-
-@Composable
-private fun SummaryRow(
-    label: String,
-    claudeValue: String,
-    yandexValue: String,
-    claudeWins: Boolean? = null
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, fontSize = 11.sp, modifier = Modifier.weight(1f))
-        Text(
-            text = claudeValue + if (claudeWins == true) " ✓" else "",
-            fontSize = 11.sp,
-            modifier = Modifier.weight(1f),
-            textAlign = TextAlign.Center,
-            fontWeight = if (claudeWins == true) FontWeight.Bold else FontWeight.Normal,
-            color = if (claudeWins == true) Color(0xFF4CAF50) else Color.Unspecified
-        )
-        Text(
-            text = yandexValue + if (claudeWins == false) " ✓" else "",
-            fontSize = 11.sp,
-            modifier = Modifier.weight(1f),
-            textAlign = TextAlign.Center,
-            fontWeight = if (claudeWins == false) FontWeight.Bold else FontWeight.Normal,
-            color = if (claudeWins == false) Color(0xFF4CAF50) else Color.Unspecified
-        )
-    }
-}
-

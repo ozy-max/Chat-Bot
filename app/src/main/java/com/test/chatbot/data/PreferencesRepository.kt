@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -25,6 +26,7 @@ class PreferencesRepository(private val context: Context) {
         private val YANDEX_FOLDER_ID = stringPreferencesKey("yandex_folder_id")
         private val TEMPERATURE = doublePreferencesKey("temperature")
         private val SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
+        private val MAX_TOKENS = intPreferencesKey("max_tokens")
     }
     
     /**
@@ -35,7 +37,8 @@ class PreferencesRepository(private val context: Context) {
         val yandexApiKey: String = "",
         val yandexFolderId: String = "",
         val temperature: Double = 0.7,
-        val selectedProvider: String = "CLAUDE"
+        val selectedProvider: String = "CLAUDE",
+        val maxTokens: Int = 4096
     )
     
     /**
@@ -47,7 +50,8 @@ class PreferencesRepository(private val context: Context) {
             yandexApiKey = preferences[YANDEX_API_KEY] ?: "",
             yandexFolderId = preferences[YANDEX_FOLDER_ID] ?: "",
             temperature = preferences[TEMPERATURE] ?: 0.7,
-            selectedProvider = preferences[SELECTED_PROVIDER] ?: "CLAUDE"
+            selectedProvider = preferences[SELECTED_PROVIDER] ?: "CLAUDE",
+            maxTokens = preferences[MAX_TOKENS] ?: 4096
         )
     }
     
@@ -93,6 +97,15 @@ class PreferencesRepository(private val context: Context) {
     suspend fun saveSelectedProvider(provider: String) {
         context.dataStore.edit { preferences ->
             preferences[SELECTED_PROVIDER] = provider
+        }
+    }
+    
+    /**
+     * Сохранить максимальное количество токенов
+     */
+    suspend fun saveMaxTokens(maxTokens: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[MAX_TOKENS] = maxTokens
         }
     }
     

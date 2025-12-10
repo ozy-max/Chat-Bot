@@ -8,6 +8,7 @@ sealed interface ChatUiEvents {
     data class UpdateYandexApiKey(val apiKey: String) : ChatUiEvents
     data class UpdateYandexFolderId(val folderId: String) : ChatUiEvents
     data class UpdateTemperature(val temperature: Double) : ChatUiEvents
+    data class UpdateMaxTokens(val maxTokens: Int) : ChatUiEvents
     data class UpdateProvider(val provider: AiProvider) : ChatUiEvents
     data object ShowApiKeyDialog : ChatUiEvents
     data object DismissApiKeyDialog : ChatUiEvents

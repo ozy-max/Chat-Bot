@@ -16,9 +16,9 @@ object RetrofitClient {
     
     private val okHttpClient = OkHttpClient.Builder()
         .addInterceptor(loggingInterceptor)
-        .connectTimeout(60, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
+        .connectTimeout(120, TimeUnit.SECONDS)  // 2 минуты на подключение
+        .readTimeout(180, TimeUnit.SECONDS)     // 3 минуты на чтение (для длинных ответов)
+        .writeTimeout(120, TimeUnit.SECONDS)    // 2 минуты на запись
         .build()
     
     // Claude API

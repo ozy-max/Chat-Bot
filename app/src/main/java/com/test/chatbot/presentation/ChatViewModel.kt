@@ -287,7 +287,19 @@ class ChatViewModel(
     private fun clearChat() {
         claudeHistory.clear()
         yandexHistory.clear()
-        _uiState.update { it.copy(messages = emptyList(), tokenStats = TokenStats()) }
+        
+        // Сброс данных компрессии
+        currentSummary = null
+        messagesSinceCompression = 0
+        totalOriginalTokens = 0
+        
+        _uiState.update { 
+            it.copy(
+                messages = emptyList(), 
+                tokenStats = TokenStats(),
+                compressionState = CompressionState(isEnabled = it.compressionSettings.enabled)
+            ) 
+        }
     }
     
     private fun updateTemperature(temperature: Double) {
@@ -604,16 +616,25 @@ class ChatViewModel(
     
     /**
      * Обновление статистики компрессии
+     * 
+     * Логика экономии:
+     * - originalTokens: сколько токенов занимали сжатые сообщения
+     * - compressedTokens: сколько токенов занимает summary
+     * - savedPerRequest: экономия на КАЖДОМ следующем запросе
      */
     private fun updateCompressionStats(result: CompressionResult) {
         val currentState = _uiState.value.compressionState
-        val newSavedTokens = currentState.savedTokens + (result.originalTokens - result.compressedTokens)
-        val newOriginalTotal = currentState.originalTokenCount + result.originalTokens
-        val newCompressedTotal = currentState.compressedTokenCount + result.compressedTokens
         
-        val savingsPercent = if (newOriginalTotal > 0) {
-            ((newOriginalTotal - newCompressedTotal).toFloat() / newOriginalTotal * 100)
-        } else 0f
+        // Экономия на каждом следующем запросе
+        val savedPerRequest = result.originalTokens - result.compressedTokens
+        
+        // Процент сжатия этой компрессии
+        val compressionRatio = if (result.originalTokens > 0) {
+            (result.compressedTokens.toFloat() / result.originalTokens * 100)
+        } else 100f
+        
+        // Процент экономии
+        val savingsPercent = 100f - compressionRatio
         
         _uiState.update { 
             it.copy(
@@ -621,14 +642,25 @@ class ChatViewModel(
                 compressionState = CompressionState(
                     isEnabled = it.compressionSettings.enabled,
                     compressionCount = currentState.compressionCount + 1,
-                    originalTokenCount = newOriginalTotal,
-                    compressedTokenCount = newCompressedTotal,
-                    savedTokens = newSavedTokens,
+                    originalTokenCount = result.originalTokens, // Токенов ДО сжатия
+                    compressedTokenCount = result.compressedTokens, // Токенов ПОСЛЕ сжатия
+                    savedTokens = savedPerRequest, // Экономия на запрос
                     savingsPercent = savingsPercent,
                     hasSummary = true,
-                    summaryPreview = result.summary.take(200) + if (result.summary.length > 200) "..." else ""
+                    summaryPreview = result.summary.take(150) + if (result.summary.length > 150) "..." else "",
+                    currentHistoryTokens = result.compressedTokens,
+                    virtualHistoryTokens = currentState.virtualHistoryTokens + result.originalTokens,
+                    totalSavedTokens = currentState.totalSavedTokens + savedPerRequest
                 )
             )
         }
+        
+        Log.d("ChatViewModel", """
+            Compression stats:
+            - Original: ${result.originalTokens} tokens (${result.originalMessages} messages)
+            - Compressed: ${result.compressedTokens} tokens (summary)
+            - Saved per request: $savedPerRequest tokens
+            - Savings: ${savingsPercent.toInt()}%
+        """.trimIndent())
     }
 }

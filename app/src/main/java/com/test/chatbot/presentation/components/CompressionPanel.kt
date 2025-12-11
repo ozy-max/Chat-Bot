@@ -235,38 +235,93 @@ fun CompressionPanel(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "📊 Статистика компрессии",
+                                    text = "📊 Последнее сжатие",
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = Color(0xFF4CAF50)
                                 )
                                 Text(
-                                    text = "×${compressionState.compressionCount}",
-                                    fontSize = 12.sp,
+                                    text = "Сжатий: ${compressionState.compressionCount}",
+                                    fontSize = 11.sp,
                                     color = Color.White.copy(alpha = 0.6f)
                                 )
                             }
                             
+                            // Визуальное сравнение: Было → Стало
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                StatItem(
-                                    label = "Оригинал",
-                                    value = "${compressionState.originalTokenCount}",
-                                    unit = "токенов"
+                                // Было
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "БЫЛО",
+                                        fontSize = 9.sp,
+                                        color = Color.White.copy(alpha = 0.5f)
+                                    )
+                                    Text(
+                                        text = "${compressionState.originalTokenCount}",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFFF6B6B)
+                                    )
+                                    Text(
+                                        text = "токенов",
+                                        fontSize = 9.sp,
+                                        color = Color.White.copy(alpha = 0.4f)
+                                    )
+                                }
+                                
+                                // Стрелка
+                                Text(
+                                    text = "  →  ",
+                                    fontSize = 20.sp,
+                                    color = AccentYellow,
+                                    modifier = Modifier.padding(horizontal = 8.dp)
                                 )
-                                StatItem(
-                                    label = "После",
-                                    value = "${compressionState.compressedTokenCount}",
-                                    unit = "токенов"
-                                )
-                                StatItem(
-                                    label = "Экономия",
-                                    value = "${compressionState.savedTokens}",
-                                    unit = "токенов",
-                                    highlight = true
-                                )
+                                
+                                // Стало
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "СТАЛО",
+                                        fontSize = 9.sp,
+                                        color = Color.White.copy(alpha = 0.5f)
+                                    )
+                                    Text(
+                                        text = "${compressionState.compressedTokenCount}",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF4CAF50)
+                                    )
+                                    Text(
+                                        text = "токенов",
+                                        fontSize = 9.sp,
+                                        color = Color.White.copy(alpha = 0.4f)
+                                    )
+                                }
+                                
+                                Spacer(modifier = Modifier.width(16.dp))
+                                
+                                // Экономия
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "ЭКОНОМИЯ",
+                                        fontSize = 9.sp,
+                                        color = Color.White.copy(alpha = 0.5f)
+                                    )
+                                    Text(
+                                        text = "-${compressionState.savedTokens}",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFFDFFF00)
+                                    )
+                                    Text(
+                                        text = "на запрос",
+                                        fontSize = 9.sp,
+                                        color = Color.White.copy(alpha = 0.4f)
+                                    )
+                                }
                             }
                             
                             // Прогресс бар экономии
@@ -280,18 +335,31 @@ fun CompressionPanel(
                                     progress = { progress },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(4.dp)),
                                     color = Color(0xFF4CAF50),
                                     trackColor = Color(0xFF333333)
                                 )
                                 
-                                Text(
-                                    text = "Экономия: ${compressionState.savingsPercent.toInt()}%",
-                                    fontSize = 10.sp,
-                                    color = Color(0xFF4CAF50),
-                                    modifier = Modifier.padding(top = 4.dp)
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "Степень сжатия: ${compressionState.savingsPercent.toInt()}%",
+                                        fontSize = 10.sp,
+                                        color = Color(0xFF4CAF50)
+                                    )
+                                    if (compressionState.totalSavedTokens > 0) {
+                                        Text(
+                                            text = "Всего сэкономлено: ${compressionState.totalSavedTokens}",
+                                            fontSize = 10.sp,
+                                            color = Color(0xFFDFFF00)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

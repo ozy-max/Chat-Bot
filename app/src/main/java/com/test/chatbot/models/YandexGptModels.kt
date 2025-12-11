@@ -66,3 +66,4 @@ enum class AiProvider(val displayName: String) {
     YANDEX_GPT("YandexGPT")
 }
 
+

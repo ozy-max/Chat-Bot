@@ -3,6 +3,7 @@ package com.test.chatbot.repository
 import com.test.chatbot.api.RetrofitClient
 import com.test.chatbot.models.*
 import com.test.chatbot.utils.SystemPrompts
+import com.test.chatbot.models.SummarizationPrompts
 import com.test.chatbot.utils.ToolsUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -268,8 +269,127 @@ class ChatRepository {
     /**
      * Примерная оценка токенов (1 токен ≈ 4 символа для английского, 2-3 для русского)
      */
-    private fun estimateTokens(text: String): Int {
+    fun estimateTokens(text: String): Int {
         return (text.length / 3.0).toInt().coerceAtLeast(1)
+    }
+    
+    /**
+     * Создание summary для списка сообщений Claude
+     */
+    suspend fun summarizeClaudeHistory(
+        apiKey: String,
+        messages: List<ClaudeMessage>
+    ): Result<CompressionResult> = withContext(Dispatchers.IO) {
+        try {
+            // Формируем текст диалога для суммаризации
+            val conversationText = messages.joinToString("\n\n") { msg ->
+                val role = if (msg.role == "user") "👤 Пользователь" else "🤖 Ассистент"
+                "$role:\n${msg.content}"
+            }
+            
+            val originalTokens = estimateTokens(conversationText)
+            
+            val request = ClaudeRequest(
+                system = SummarizationPrompts.SUMMARIZE_CONVERSATION,
+                messages = listOf(
+                    ClaudeMessage(
+                        role = "user",
+                        content = "Суммаризируй следующий диалог:\n\n$conversationText"
+                    )
+                ),
+                maxTokens = 1000,
+                temperature = 0.3, // Низкая температура для точности
+                tools = null
+            )
+            
+            val response = claudeApiService.sendMessage(apiKey, request = request)
+            
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                val summary = body.content
+                    .filter { it.type == "text" }
+                    .joinToString("") { it.text ?: "" }
+                
+                val compressedTokens = estimateTokens(summary)
+                
+                Result.success(CompressionResult(
+                    success = true,
+                    summary = summary,
+                    originalMessages = messages.size,
+                    originalTokens = originalTokens,
+                    compressedTokens = compressedTokens
+                ))
+            } else {
+                Result.failure(Exception("Ошибка суммаризации: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Создание summary для списка сообщений YandexGPT
+     */
+    suspend fun summarizeYandexHistory(
+        apiKey: String,
+        folderId: String,
+        messages: List<YandexGptMessage>
+    ): Result<CompressionResult> = withContext(Dispatchers.IO) {
+        try {
+            // Формируем текст диалога для суммаризации
+            val conversationText = messages
+                .filter { it.role != "system" }
+                .joinToString("\n\n") { msg ->
+                    val role = if (msg.role == "user") "👤 Пользователь" else "🤖 Ассистент"
+                    "$role:\n${msg.text}"
+                }
+            
+            val originalTokens = estimateTokens(conversationText)
+            
+            val request = YandexGptRequest(
+                modelUri = "gpt://$folderId/yandexgpt-lite",
+                completionOptions = CompletionOptions(
+                    stream = false,
+                    temperature = 0.3,
+                    maxTokens = "1000"
+                ),
+                messages = listOf(
+                    YandexGptMessage(
+                        role = "system",
+                        text = SummarizationPrompts.SUMMARIZE_CONVERSATION
+                    ),
+                    YandexGptMessage(
+                        role = "user",
+                        text = "Суммаризируй следующий диалог:\n\n$conversationText"
+                    )
+                )
+            )
+            
+            val response = yandexApiService.sendMessage(
+                authorization = "Api-Key $apiKey",
+                request = request
+            )
+            
+            if (response.isSuccessful && response.body() != null) {
+                val body = response.body()!!
+                val summary = body.result.alternatives
+                    .firstOrNull()?.message?.text ?: ""
+                
+                val compressedTokens = estimateTokens(summary)
+                
+                Result.success(CompressionResult(
+                    success = true,
+                    summary = summary,
+                    originalMessages = messages.size,
+                    originalTokens = originalTokens,
+                    compressedTokens = compressedTokens
+                ))
+            } else {
+                Result.failure(Exception("Ошибка суммаризации: ${response.code()}"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
     
     fun executeToolCall(toolName: String, input: Map<String, Any>): String {

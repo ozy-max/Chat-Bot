@@ -1,6 +1,8 @@
 package com.test.chatbot.presentation
 
 import com.test.chatbot.models.AiProvider
+import com.test.chatbot.models.CompressionSettings
+import com.test.chatbot.models.CompressionState
 import com.test.chatbot.models.Message
 import com.test.chatbot.models.ModelComparisonResult
 import com.test.chatbot.models.TokenStats
@@ -27,5 +29,11 @@ data class ChatUiState(
     // Состояние сравнения моделей
     val showComparisonDialog: Boolean = false,
     val isComparing: Boolean = false,
-    val comparisonResult: ModelComparisonResult? = null
+    val comparisonResult: ModelComparisonResult? = null,
+    
+    // Компрессия диалога
+    val compressionSettings: CompressionSettings = CompressionSettings(),
+    val compressionState: CompressionState = CompressionState(),
+    val isCompressing: Boolean = false,
+    val showCompressionInfo: Boolean = false
 )

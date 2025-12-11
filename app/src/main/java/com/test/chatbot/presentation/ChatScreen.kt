@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.sp
 import com.test.chatbot.models.AiProvider
 import com.test.chatbot.presentation.components.ApiKeyDialog
 import com.test.chatbot.presentation.components.ComparisonDialog
+import com.test.chatbot.presentation.components.CompressionInfoDialog
+import com.test.chatbot.presentation.components.CompressionPanel
 import com.test.chatbot.presentation.components.MessageItem
 import com.test.chatbot.presentation.components.SettingsDialog
 import com.test.chatbot.presentation.components.TokenStatsBar
@@ -92,6 +94,14 @@ fun ChatScreen(
             onDismiss = { onUiEvent(ChatUiEvents.DismissComparisonDialog) },
             onCompare = { query -> onUiEvent(ChatUiEvents.CompareModels(query)) },
             onClearResult = { onUiEvent(ChatUiEvents.ClearComparisonResult) }
+        )
+    }
+    
+    // Диалог информации о компрессии
+    if (uiState.showCompressionInfo) {
+        CompressionInfoDialog(
+            compressionState = uiState.compressionState,
+            onDismiss = { onUiEvent(ChatUiEvents.DismissCompressionInfo) }
         )
     }
     
@@ -258,6 +268,18 @@ fun ChatScreen(
         ) {
             // Панель статистики токенов (sticky под TopAppBar)
             TokenStatsBar(stats = uiState.tokenStats)
+            
+            // Панель компрессии
+            CompressionPanel(
+                compressionSettings = uiState.compressionSettings,
+                compressionState = uiState.compressionState,
+                isCompressing = uiState.isCompressing,
+                onToggleCompression = { onUiEvent(ChatUiEvents.ToggleCompression(it)) },
+                onUpdateThreshold = { onUiEvent(ChatUiEvents.UpdateCompressionThreshold(it)) },
+                onManualCompress = { onUiEvent(ChatUiEvents.ManualCompress) },
+                onShowInfo = { onUiEvent(ChatUiEvents.ShowCompressionInfo) },
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+            )
             
             // Список сообщений
             Box(

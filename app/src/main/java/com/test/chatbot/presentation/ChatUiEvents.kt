@@ -22,5 +22,12 @@ sealed interface ChatUiEvents {
     data object ShowComparisonDialog : ChatUiEvents
     data object DismissComparisonDialog : ChatUiEvents
     data object ClearComparisonResult : ChatUiEvents
+    
+    // События для компрессии диалога
+    data class ToggleCompression(val enabled: Boolean) : ChatUiEvents
+    data class UpdateCompressionThreshold(val threshold: Int) : ChatUiEvents
+    data object ManualCompress : ChatUiEvents // Ручная компрессия
+    data object ShowCompressionInfo : ChatUiEvents
+    data object DismissCompressionInfo : ChatUiEvents
 }
 

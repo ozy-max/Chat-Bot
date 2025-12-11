@@ -26,6 +26,13 @@ class ChatViewModel(
     // История для YandexGPT
     private val yandexHistory = mutableListOf<YandexGptMessage>()
     
+    // Хранение summary для компрессии
+    private var currentSummary: String? = null
+    // Счетчик сообщений с момента последней компрессии
+    private var messagesSinceCompression = 0
+    // Токены без компрессии (для статистики)
+    private var totalOriginalTokens = 0
+    
     init {
         loadSavedSettings()
     }
@@ -87,6 +94,12 @@ class ChatViewModel(
             is ChatUiEvents.ShowComparisonDialog -> showComparisonDialog()
             is ChatUiEvents.DismissComparisonDialog -> dismissComparisonDialog()
             is ChatUiEvents.ClearComparisonResult -> clearComparisonResult()
+            // Компрессия диалога
+            is ChatUiEvents.ToggleCompression -> toggleCompression(event.enabled)
+            is ChatUiEvents.UpdateCompressionThreshold -> updateCompressionThreshold(event.threshold)
+            is ChatUiEvents.ManualCompress -> manualCompress()
+            is ChatUiEvents.ShowCompressionInfo -> showCompressionInfo()
+            is ChatUiEvents.DismissCompressionInfo -> dismissCompressionInfo()
         }
     }
     
@@ -114,6 +127,10 @@ class ChatViewModel(
             }
         }
         
+        // Увеличиваем счетчик сообщений
+        messagesSinceCompression++
+        totalOriginalTokens += repository.estimateTokens(userMessage)
+        
         // Отправляем запрос
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
@@ -122,6 +139,10 @@ class ChatViewModel(
                     AiProvider.CLAUDE -> sendToClaude()
                     AiProvider.YANDEX_GPT -> sendToYandexGpt()
                 }
+                
+                // Проверяем нужна ли автоматическая компрессия
+                checkAndPerformAutoCompression()
+                
             } catch (e: Exception) {
                 _uiState.update { 
                     it.copy(
@@ -392,5 +413,222 @@ class ChatViewModel(
     
     private fun clearComparisonResult() {
         _uiState.update { it.copy(comparisonResult = null) }
+    }
+    
+    // ===== Компрессия диалога =====
+    
+    private fun toggleCompression(enabled: Boolean) {
+        _uiState.update { 
+            it.copy(
+                compressionSettings = it.compressionSettings.copy(enabled = enabled),
+                compressionState = it.compressionState.copy(isEnabled = enabled)
+            ) 
+        }
+        Log.d("ChatViewModel", "Compression ${if (enabled) "enabled" else "disabled"}")
+    }
+    
+    private fun updateCompressionThreshold(threshold: Int) {
+        _uiState.update { 
+            it.copy(compressionSettings = it.compressionSettings.copy(threshold = threshold)) 
+        }
+    }
+    
+    private fun showCompressionInfo() {
+        _uiState.update { it.copy(showCompressionInfo = true) }
+    }
+    
+    private fun dismissCompressionInfo() {
+        _uiState.update { it.copy(showCompressionInfo = false) }
+    }
+    
+    /**
+     * Проверка и выполнение автоматической компрессии
+     */
+    private suspend fun checkAndPerformAutoCompression() {
+        val settings = _uiState.value.compressionSettings
+        
+        if (!settings.enabled) return
+        
+        // Проверяем порог сообщений
+        val historySize = when (_uiState.value.selectedProvider) {
+            AiProvider.CLAUDE -> claudeHistory.size
+            AiProvider.YANDEX_GPT -> yandexHistory.filter { it.role != "system" }.size
+        }
+        
+        if (historySize >= settings.threshold) {
+            performCompression()
+        }
+    }
+    
+    /**
+     * Ручная компрессия
+     */
+    private fun manualCompress() {
+        viewModelScope.launch {
+            performCompression()
+        }
+    }
+    
+    /**
+     * Выполнение компрессии диалога
+     */
+    private suspend fun performCompression() {
+        val settings = _uiState.value.compressionSettings
+        val provider = _uiState.value.selectedProvider
+        
+        _uiState.update { it.copy(isCompressing = true) }
+        
+        try {
+            when (provider) {
+                AiProvider.CLAUDE -> compressClaudeHistory(settings)
+                AiProvider.YANDEX_GPT -> compressYandexHistory(settings)
+            }
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Compression error: ${e.message}")
+            _uiState.update { 
+                it.copy(
+                    isCompressing = false,
+                    error = "Ошибка компрессии: ${e.message}"
+                ) 
+            }
+        }
+    }
+    
+    /**
+     * Компрессия истории Claude
+     */
+    private suspend fun compressClaudeHistory(settings: CompressionSettings) {
+        if (claudeHistory.size < settings.keepRecentMessages + 2) {
+            _uiState.update { it.copy(isCompressing = false) }
+            return
+        }
+        
+        // Определяем сообщения для суммаризации (все кроме последних N)
+        val messagesToSummarize = claudeHistory.dropLast(settings.keepRecentMessages)
+        val recentMessages = claudeHistory.takeLast(settings.keepRecentMessages)
+        
+        val result = repository.summarizeClaudeHistory(
+            _uiState.value.apiKey,
+            messagesToSummarize
+        )
+        
+        result.onSuccess { compressionResult ->
+            // Сохраняем summary
+            currentSummary = compressionResult.summary
+            
+            // Очищаем историю и добавляем summary как первое сообщение + последние сообщения
+            claudeHistory.clear()
+            claudeHistory.add(ClaudeMessage(
+                role = "user",
+                content = "КОНТЕКСТ ПРЕДЫДУЩЕГО РАЗГОВОРА:\n${compressionResult.summary}\n\n---\nПродолжаем разговор с учётом контекста выше."
+            ))
+            claudeHistory.add(ClaudeMessage(
+                role = "assistant",
+                content = "Понял. Я учитываю контекст предыдущего разговора и готов продолжить."
+            ))
+            claudeHistory.addAll(recentMessages)
+            
+            // Обновляем статистику компрессии
+            updateCompressionStats(compressionResult)
+            
+            // Сбрасываем счетчик
+            messagesSinceCompression = 0
+            
+            Log.d("ChatViewModel", "Claude history compressed: ${compressionResult.originalTokens} → ${compressionResult.compressedTokens} tokens")
+        }.onFailure { error ->
+            _uiState.update { 
+                it.copy(
+                    isCompressing = false,
+                    error = "Ошибка компрессии Claude: ${error.message}"
+                ) 
+            }
+        }
+    }
+    
+    /**
+     * Компрессия истории YandexGPT
+     */
+    private suspend fun compressYandexHistory(settings: CompressionSettings) {
+        val nonSystemMessages = yandexHistory.filter { it.role != "system" }
+        if (nonSystemMessages.size < settings.keepRecentMessages + 2) {
+            _uiState.update { it.copy(isCompressing = false) }
+            return
+        }
+        
+        // Сохраняем системное сообщение
+        val systemMessage = yandexHistory.find { it.role == "system" }
+        
+        // Определяем сообщения для суммаризации
+        val messagesToSummarize = nonSystemMessages.dropLast(settings.keepRecentMessages)
+        val recentMessages = nonSystemMessages.takeLast(settings.keepRecentMessages)
+        
+        val result = repository.summarizeYandexHistory(
+            _uiState.value.yandexApiKey,
+            _uiState.value.yandexFolderId,
+            messagesToSummarize
+        )
+        
+        result.onSuccess { compressionResult ->
+            // Сохраняем summary
+            currentSummary = compressionResult.summary
+            
+            // Очищаем историю и строим новую
+            yandexHistory.clear()
+            
+            // Добавляем системное сообщение с контекстом
+            yandexHistory.add(YandexGptMessage(
+                role = "system",
+                text = (systemMessage?.text ?: "Ты — универсальный ИИ-ассистент.") + 
+                    "\n\nКОНТЕКСТ ПРЕДЫДУЩЕГО РАЗГОВОРА:\n${compressionResult.summary}"
+            ))
+            
+            // Добавляем последние сообщения
+            yandexHistory.addAll(recentMessages)
+            
+            // Обновляем статистику компрессии
+            updateCompressionStats(compressionResult)
+            
+            // Сбрасываем счетчик
+            messagesSinceCompression = 0
+            
+            Log.d("ChatViewModel", "Yandex history compressed: ${compressionResult.originalTokens} → ${compressionResult.compressedTokens} tokens")
+        }.onFailure { error ->
+            _uiState.update { 
+                it.copy(
+                    isCompressing = false,
+                    error = "Ошибка компрессии YandexGPT: ${error.message}"
+                ) 
+            }
+        }
+    }
+    
+    /**
+     * Обновление статистики компрессии
+     */
+    private fun updateCompressionStats(result: CompressionResult) {
+        val currentState = _uiState.value.compressionState
+        val newSavedTokens = currentState.savedTokens + (result.originalTokens - result.compressedTokens)
+        val newOriginalTotal = currentState.originalTokenCount + result.originalTokens
+        val newCompressedTotal = currentState.compressedTokenCount + result.compressedTokens
+        
+        val savingsPercent = if (newOriginalTotal > 0) {
+            ((newOriginalTotal - newCompressedTotal).toFloat() / newOriginalTotal * 100)
+        } else 0f
+        
+        _uiState.update { 
+            it.copy(
+                isCompressing = false,
+                compressionState = CompressionState(
+                    isEnabled = it.compressionSettings.enabled,
+                    compressionCount = currentState.compressionCount + 1,
+                    originalTokenCount = newOriginalTotal,
+                    compressedTokenCount = newCompressedTotal,
+                    savedTokens = newSavedTokens,
+                    savingsPercent = savingsPercent,
+                    hasSummary = true,
+                    summaryPreview = result.summary.take(200) + if (result.summary.length > 200) "..." else ""
+                )
+            )
+        }
     }
 }

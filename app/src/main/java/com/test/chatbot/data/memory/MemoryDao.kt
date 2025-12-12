@@ -1,6 +1,11 @@
 package com.test.chatbot.data.memory
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -30,19 +35,19 @@ interface MemoryDao {
     /**
      * Поиск по ключу
      */
-    @Query("SELECT * FROM memories WHERE key LIKE '%' || :query || '%' AND isActive = 1")
+    @Query("SELECT * FROM memories WHERE memory_key LIKE '%' || :query || '%' AND isActive = 1")
     fun searchByKey(query: String): Flow<List<MemoryEntity>>
     
     /**
      * Поиск по значению
      */
-    @Query("SELECT * FROM memories WHERE value LIKE '%' || :query || '%' AND isActive = 1")
+    @Query("SELECT * FROM memories WHERE memory_value LIKE '%' || :query || '%' AND isActive = 1")
     fun searchByValue(query: String): Flow<List<MemoryEntity>>
     
     /**
      * Найти запись по ключу (точное совпадение)
      */
-    @Query("SELECT * FROM memories WHERE key = :key AND isActive = 1 LIMIT 1")
+    @Query("SELECT * FROM memories WHERE memory_key = :key AND isActive = 1 LIMIT 1")
     suspend fun findByKey(key: String): MemoryEntity?
     
     /**

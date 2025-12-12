@@ -1,5 +1,6 @@
 package com.test.chatbot.data.memory
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -21,9 +22,11 @@ data class MemoryEntity(
     val type: MemoryType = MemoryType.FACT,
     
     // Ключ/категория (например, "имя", "город", "работа")
+    @ColumnInfo(name = "memory_key")
     val key: String,
     
     // Значение/содержимое памяти
+    @ColumnInfo(name = "memory_value")
     val value: String,
     
     // Источник (из какого сообщения извлечено)

@@ -19,11 +19,19 @@ class ChatRepository {
         apiKey: String,
         conversationHistory: List<ClaudeMessage>,
         temperature: Double = 0.7,
-        maxTokens: Int = 4096
+        maxTokens: Int = 4096,
+        memoryContext: String = ""
     ): Result<ApiResponseWithTokens> = withContext(Dispatchers.IO) {
         try {
+            // Добавляем контекст памяти к системному промпту если есть
+            val systemPrompt = if (memoryContext.isNotBlank()) {
+                "${SystemPrompts.UNIVERSAL_AGENT}\n\n$memoryContext"
+            } else {
+                SystemPrompts.UNIVERSAL_AGENT
+            }
+            
             val request = ClaudeRequest(
-                system = SystemPrompts.UNIVERSAL_AGENT,
+                system = systemPrompt,
                 messages = conversationHistory,
                 maxTokens = maxTokens,
                 temperature = temperature,
@@ -58,9 +66,23 @@ class ChatRepository {
         folderId: String,
         messages: List<YandexGptMessage>,
         temperature: Double = 0.7,
-        maxTokens: Int = 2000
+        maxTokens: Int = 2000,
+        memoryContext: String = ""
     ): Result<ApiResponseWithTokens> = withContext(Dispatchers.IO) {
         try {
+            // Обновляем системное сообщение если есть контекст памяти
+            val updatedMessages = if (memoryContext.isNotBlank()) {
+                messages.map { msg ->
+                    if (msg.role == "system") {
+                        msg.copy(text = "${msg.text}\n\n$memoryContext")
+                    } else {
+                        msg
+                    }
+                }
+            } else {
+                messages
+            }
+            
             val request = YandexGptRequest(
                 modelUri = "gpt://$folderId/yandexgpt-lite",
                 completionOptions = CompletionOptions(
@@ -68,7 +90,7 @@ class ChatRepository {
                     temperature = temperature,
                     maxTokens = maxTokens.toString()
                 ),
-                messages = messages
+                messages = updatedMessages
             )
             
             val response = yandexApiService.sendMessage(

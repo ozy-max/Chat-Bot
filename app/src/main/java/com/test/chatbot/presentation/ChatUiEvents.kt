@@ -29,5 +29,18 @@ sealed interface ChatUiEvents {
     data object ManualCompress : ChatUiEvents // Ручная компрессия
     data object ShowCompressionInfo : ChatUiEvents
     data object DismissCompressionInfo : ChatUiEvents
+    
+    // События для долговременной памяти (хранит только summary предыдущего диалога)
+    data class ToggleMemory(val enabled: Boolean) : ChatUiEvents
+    data object ClearAllMemories : ChatUiEvents // Очистить сохранённый summary
+    data object ShowMemoryDialog : ChatUiEvents
+    data object DismissMemoryDialog : ChatUiEvents
+    
+    // AI Features Bottom Sheet
+    data object ShowAiFeaturesSheet : ChatUiEvents
+    data object DismissAiFeaturesSheet : ChatUiEvents
+    
+    // Lifecycle события
+    data object OnAppPause : ChatUiEvents // Сохранить summary при уходе в фон
 }
 

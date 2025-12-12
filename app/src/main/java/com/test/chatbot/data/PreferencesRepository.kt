@@ -3,12 +3,14 @@ package com.test.chatbot.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 // Extension для создания DataStore
@@ -27,6 +29,7 @@ class PreferencesRepository(private val context: Context) {
         private val TEMPERATURE = doublePreferencesKey("temperature")
         private val SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
         private val MAX_TOKENS = intPreferencesKey("max_tokens")
+        private val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
     }
     
     /**
@@ -126,6 +129,23 @@ class PreferencesRepository(private val context: Context) {
             preferences[TEMPERATURE] = temperature
             preferences[SELECTED_PROVIDER] = selectedProvider
         }
+    }
+    
+    /**
+     * Сохранить состояние памяти (включена/выключена)
+     */
+    suspend fun saveMemoryEnabled(enabled: Boolean) {
+        context.dataStore.edit { preferences ->
+            preferences[MEMORY_ENABLED] = enabled
+        }
+    }
+    
+    /**
+     * Загрузить состояние памяти
+     */
+    suspend fun loadMemoryEnabled(): Boolean {
+        val preferences = context.dataStore.data.first()
+        return preferences[MEMORY_ENABLED] ?: true
     }
 }
 

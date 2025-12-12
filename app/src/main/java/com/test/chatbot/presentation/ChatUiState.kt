@@ -1,5 +1,6 @@
 package com.test.chatbot.presentation
 
+import com.test.chatbot.data.memory.MemoryState
 import com.test.chatbot.models.AiProvider
 import com.test.chatbot.models.CompressionSettings
 import com.test.chatbot.models.CompressionState
@@ -35,5 +36,12 @@ data class ChatUiState(
     val compressionSettings: CompressionSettings = CompressionSettings(),
     val compressionState: CompressionState = CompressionState(),
     val isCompressing: Boolean = false,
-    val showCompressionInfo: Boolean = false
+    val showCompressionInfo: Boolean = false,
+    
+    // Долговременная память
+    val memoryState: MemoryState = MemoryState(),
+    val showMemoryDialog: Boolean = false,
+    
+    // AI Features Bottom Sheet
+    val showAiFeaturesSheet: Boolean = false
 )

@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
@@ -26,16 +27,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.test.chatbot.models.AiProvider
+import com.test.chatbot.presentation.components.AiFeaturesBottomSheet
 import com.test.chatbot.presentation.components.ApiKeyDialog
 import com.test.chatbot.presentation.components.ComparisonDialog
 import com.test.chatbot.presentation.components.CompressionInfoDialog
-import com.test.chatbot.presentation.components.CompressionPanel
 import com.test.chatbot.presentation.components.MessageItem
 import com.test.chatbot.presentation.components.SettingsDialog
-import com.test.chatbot.presentation.components.TokenStatsBar
 import com.test.chatbot.ui.theme.AccentYellow
 import com.test.chatbot.ui.theme.PureBlack
 import kotlinx.coroutines.launch
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -48,11 +51,34 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     
+    // Bottom Sheet state
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+    
     LaunchedEffect(uiState.messages.size) {
         if (uiState.messages.isNotEmpty()) {
             coroutineScope.launch {
                 listState.animateScrollToItem(uiState.messages.size - 1)
             }
+        }
+    }
+    
+    // Отслеживание lifecycle для сохранения памяти при выходе
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_STOP -> {
+                    // Сохраняем summary при уходе в фон или закрытии
+                    onUiEvent(ChatUiEvents.OnAppPause)
+                }
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
     
@@ -105,6 +131,28 @@ fun ChatScreen(
         )
     }
     
+    
+    // AI Features Bottom Sheet
+    if (uiState.showAiFeaturesSheet) {
+        AiFeaturesBottomSheet(
+            sheetState = sheetState,
+            // Компрессия
+            compressionSettings = uiState.compressionSettings,
+            compressionState = uiState.compressionState,
+            isCompressing = uiState.isCompressing,
+            onToggleCompression = { onUiEvent(ChatUiEvents.ToggleCompression(it)) },
+            onUpdateThreshold = { onUiEvent(ChatUiEvents.UpdateCompressionThreshold(it)) },
+            onManualCompress = { onUiEvent(ChatUiEvents.ManualCompress) },
+            // Память
+            memoryState = uiState.memoryState,
+            onToggleMemory = { onUiEvent(ChatUiEvents.ToggleMemory(it)) },
+            onClearAllMemories = { onUiEvent(ChatUiEvents.ClearAllMemories) },
+            // Статистика токенов
+            tokenStats = uiState.tokenStats,
+            onDismiss = { onUiEvent(ChatUiEvents.DismissAiFeaturesSheet) }
+        )
+    }
+    
     // Диалог ошибки
     uiState.error?.let { error ->
         AlertDialog(
@@ -121,7 +169,7 @@ fun ChatScreen(
     
     Scaffold(
         topBar = {
-            // Современный жёлто-чёрный тулбар (двухуровневый)
+            // Современный жёлто-чёрный тулбар
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = PureBlack,
@@ -215,6 +263,12 @@ fun ChatScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
+                            // AI Features кнопка с badge
+                            AiFeaturesButton(
+                                hasActiveFeatures = uiState.compressionState.isEnabled || uiState.memoryState.isEnabled,
+                                hasSavedMemory = uiState.memoryState.hasSummary,
+                                onClick = { onUiEvent(ChatUiEvents.ShowAiFeaturesSheet) }
+                            )
                             SmallActionButton(
                                 icon = Icons.Default.Compare,
                                 tint = AccentYellow,
@@ -266,22 +320,7 @@ fun ChatScreen(
                 .padding(paddingValues)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Панель статистики токенов (sticky под TopAppBar)
-            TokenStatsBar(stats = uiState.tokenStats)
-            
-            // Панель компрессии
-            CompressionPanel(
-                compressionSettings = uiState.compressionSettings,
-                compressionState = uiState.compressionState,
-                isCompressing = uiState.isCompressing,
-                onToggleCompression = { onUiEvent(ChatUiEvents.ToggleCompression(it)) },
-                onUpdateThreshold = { onUiEvent(ChatUiEvents.UpdateCompressionThreshold(it)) },
-                onManualCompress = { onUiEvent(ChatUiEvents.ManualCompress) },
-                onShowInfo = { onUiEvent(ChatUiEvents.ShowCompressionInfo) },
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-            
-            // Список сообщений
+            // Список сообщений - занимает весь экран
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -371,6 +410,54 @@ fun ChatScreen(
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Кнопка AI Features с индикатором активных функций
+ */
+@Composable
+private fun AiFeaturesButton(
+    hasActiveFeatures: Boolean,
+    hasSavedMemory: Boolean,
+    onClick: () -> Unit
+) {
+    Box {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(
+                    if (hasActiveFeatures)
+                        Color(0xFF4CAF50).copy(alpha = 0.2f)
+                    else
+                        Color(0xFF1A1A1A)
+                )
+                .clickable { onClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = "AI Функции",
+                tint = if (hasActiveFeatures) Color(0xFF4CAF50) else Color.White.copy(alpha = 0.7f),
+                modifier = Modifier.size(18.dp)
+            )
+        }
+        
+        // Badge если есть сохранённая память
+        if (hasSavedMemory) {
+            Badge(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp),
+                containerColor = Color(0xFF4CAF50)
+            ) {
+                Text(
+                    text = "💾",
+                    fontSize = 8.sp
+                )
             }
         }
     }

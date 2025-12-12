@@ -4,6 +4,8 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.test.chatbot.data.PreferencesRepository
+import com.test.chatbot.data.memory.MemoryRepository
+import com.test.chatbot.data.memory.MemoryState
 import com.test.chatbot.models.*
 import com.test.chatbot.repository.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +17,8 @@ import kotlinx.coroutines.launch
 
 class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
-    private val preferencesRepository: PreferencesRepository? = null
+    private val preferencesRepository: PreferencesRepository? = null,
+    private val memoryRepository: MemoryRepository? = null
 ) : ViewModel() {
     
     private val _uiState = MutableStateFlow(ChatUiState())
@@ -32,10 +35,40 @@ class ChatViewModel(
     private var messagesSinceCompression = 0
     // Токены без компрессии (для статистики)
     private var totalOriginalTokens = 0
+    // Загруженный summary предыдущего диалога
+    private var previousDialogSummary: String? = null
     
     init {
         loadSavedSettings()
+        loadSavedSummary()
     }
+    
+    /**
+     * Загрузка сохранённого summary предыдущего диалога
+     */
+    private fun loadSavedSummary() {
+        viewModelScope.launch {
+            memoryRepository?.let { repo ->
+                val summary = repo.getSavedSummary()
+                previousDialogSummary = summary
+                
+                // Загружаем состояние памяти (вкл/выкл)
+                val memoryEnabled = preferencesRepository?.loadMemoryEnabled() ?: true
+                
+                _uiState.update { 
+                    it.copy(
+                        memoryState = it.memoryState.copy(
+                            isEnabled = memoryEnabled,
+                            hasSummary = summary != null,
+                            summaryPreview = summary?.take(100)?.plus("...") ?: ""
+                        )
+                    ) 
+                }
+                
+            }
+        }
+    }
+    
     
     /**
      * Загрузка сохранённых настроек из DataStore
@@ -100,6 +133,30 @@ class ChatViewModel(
             is ChatUiEvents.ManualCompress -> manualCompress()
             is ChatUiEvents.ShowCompressionInfo -> showCompressionInfo()
             is ChatUiEvents.DismissCompressionInfo -> dismissCompressionInfo()
+            
+            // Долговременная память
+            is ChatUiEvents.ToggleMemory -> toggleMemory(event.enabled)
+            is ChatUiEvents.ClearAllMemories -> clearAllMemories()
+            is ChatUiEvents.ShowMemoryDialog -> showMemoryDialog()
+            is ChatUiEvents.DismissMemoryDialog -> dismissMemoryDialog()
+            
+            // AI Features Bottom Sheet
+            is ChatUiEvents.ShowAiFeaturesSheet -> showAiFeaturesSheet()
+            is ChatUiEvents.DismissAiFeaturesSheet -> dismissAiFeaturesSheet()
+            
+            // Lifecycle
+            is ChatUiEvents.OnAppPause -> onAppPause()
+        }
+    }
+    
+    /**
+     * Вызывается при уходе приложения в фон (onPause/onStop)
+     * Сохраняет summary если память включена
+     */
+    private fun onAppPause() {
+        // Сохраняем summary если память включена и есть достаточно сообщений
+        if (_uiState.value.memoryState.isEnabled && _uiState.value.messages.size >= 2) {
+            saveCurrentDialogSummary()
         }
     }
     
@@ -155,11 +212,15 @@ class ChatViewModel(
     }
     
     private suspend fun sendToClaude() {
+        // Получаем контекст памяти
+        val memoryContext = getMemoryContext()
+        
         val result = repository.sendMessageToClaude(
             _uiState.value.apiKey,
             claudeHistory,
             _uiState.value.temperature,
-            _uiState.value.maxTokens
+            _uiState.value.maxTokens,
+            memoryContext
         )
         
         result.onSuccess { response ->
@@ -220,12 +281,16 @@ class ChatViewModel(
     }
     
     private suspend fun sendToYandexGpt() {
+        // Получаем контекст памяти
+        val memoryContext = getMemoryContext()
+        
         val result = repository.sendMessageToYandexGpt(
             _uiState.value.yandexApiKey,
             _uiState.value.yandexFolderId,
             yandexHistory,
             _uiState.value.temperature,
-            _uiState.value.maxTokens
+            _uiState.value.maxTokens,
+            memoryContext
         )
         
         result.onSuccess { response ->
@@ -285,6 +350,11 @@ class ChatViewModel(
     }
     
     private fun clearChat() {
+        // Сохраняем summary текущего диалога перед очисткой (если включена память)
+        if (_uiState.value.memoryState.isEnabled && _uiState.value.messages.isNotEmpty()) {
+            saveCurrentDialogSummary()
+        }
+        
         claudeHistory.clear()
         yandexHistory.clear()
         
@@ -292,6 +362,7 @@ class ChatViewModel(
         currentSummary = null
         messagesSinceCompression = 0
         totalOriginalTokens = 0
+        previousDialogSummary = null
         
         _uiState.update { 
             it.copy(
@@ -302,8 +373,63 @@ class ChatViewModel(
         }
     }
     
+    /**
+     * Сохранение summary текущего диалога в долговременную память
+     */
+    private fun saveCurrentDialogSummary() {
+        viewModelScope.launch {
+            try {
+                val messages = _uiState.value.messages
+                if (messages.size < 2) return@launch
+                
+                // Формируем текст диалога для суммаризации
+                val dialogText = messages.joinToString("\n\n") { msg ->
+                    val role = if (msg.isUser) "👤 Пользователь" else "🤖 Ассистент"
+                    "$role:\n${msg.text}"
+                }
+                
+                // Получаем summary через API
+                val provider = _uiState.value.selectedProvider
+                val summaryResult = when (provider) {
+                    AiProvider.CLAUDE -> repository.summarizeClaudeHistory(
+                        _uiState.value.apiKey,
+                        messages.map { ClaudeMessage(
+                            role = if (it.isUser) "user" else "assistant",
+                            content = it.text
+                        )}
+                    )
+                    AiProvider.YANDEX_GPT -> repository.summarizeYandexHistory(
+                        _uiState.value.yandexApiKey,
+                        _uiState.value.yandexFolderId,
+                        messages.map { YandexGptMessage(
+                            role = if (it.isUser) "user" else "assistant",
+                            text = it.text
+                        )}
+                    )
+                }
+                
+                summaryResult.onSuccess { result ->
+                    memoryRepository?.saveSummary(result.summary)
+                    
+                    // Обновляем UI
+                    _uiState.update { 
+                        it.copy(
+                            memoryState = it.memoryState.copy(
+                                hasSummary = true,
+                                summaryPreview = result.summary.take(100) + "..."
+                            )
+                        ) 
+                    }
+                }.onFailure { error ->
+                    Log.e("ChatViewModel", "Failed to save dialog summary: ${error.message}")
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Error saving dialog summary: ${e.message}")
+            }
+        }
+    }
+    
     private fun updateTemperature(temperature: Double) {
-        Log.d("ChatViewModel","updateTemperature: $temperature")
         _uiState.update { it.copy(temperature = temperature) }
         // Сохраняем в DataStore
         viewModelScope.launch {
@@ -312,7 +438,6 @@ class ChatViewModel(
     }
     
     private fun updateMaxTokens(maxTokens: Int) {
-        Log.d("ChatViewModel","updateMaxTokens: $maxTokens")
         _uiState.update { it.copy(maxTokens = maxTokens) }
         // Сохраняем в DataStore
         viewModelScope.launch {
@@ -436,7 +561,6 @@ class ChatViewModel(
                 compressionState = it.compressionState.copy(isEnabled = enabled)
             ) 
         }
-        Log.d("ChatViewModel", "Compression ${if (enabled) "enabled" else "disabled"}")
     }
     
     private fun updateCompressionThreshold(threshold: Int) {
@@ -528,6 +652,9 @@ class ChatViewModel(
             // Сохраняем summary
             currentSummary = compressionResult.summary
             
+            // Сохраняем summary в долговременную память (если включена)
+            saveSummaryToMemory(compressionResult.summary)
+            
             // Очищаем историю и добавляем summary как первое сообщение + последние сообщения
             claudeHistory.clear()
             claudeHistory.add(ClaudeMessage(
@@ -545,8 +672,6 @@ class ChatViewModel(
             
             // Сбрасываем счетчик
             messagesSinceCompression = 0
-            
-            Log.d("ChatViewModel", "Claude history compressed: ${compressionResult.originalTokens} → ${compressionResult.compressedTokens} tokens")
         }.onFailure { error ->
             _uiState.update { 
                 it.copy(
@@ -584,6 +709,9 @@ class ChatViewModel(
             // Сохраняем summary
             currentSummary = compressionResult.summary
             
+            // Сохраняем summary в долговременную память (если включена)
+            saveSummaryToMemory(compressionResult.summary)
+            
             // Очищаем историю и строим новую
             yandexHistory.clear()
             
@@ -602,8 +730,6 @@ class ChatViewModel(
             
             // Сбрасываем счетчик
             messagesSinceCompression = 0
-            
-            Log.d("ChatViewModel", "Yandex history compressed: ${compressionResult.originalTokens} → ${compressionResult.compressedTokens} tokens")
         }.onFailure { error ->
             _uiState.update { 
                 it.copy(
@@ -611,6 +737,91 @@ class ChatViewModel(
                     error = "Ошибка компрессии YandexGPT: ${error.message}"
                 ) 
             }
+        }
+    }
+    
+    /**
+     * Сохранение summary в долговременную память (при компрессии)
+     */
+    private fun saveSummaryToMemory(summary: String) {
+        if (!_uiState.value.memoryState.isEnabled) return
+        
+        viewModelScope.launch {
+            memoryRepository?.saveSummary(summary)
+            _uiState.update { 
+                it.copy(
+                    memoryState = it.memoryState.copy(
+                        hasSummary = true,
+                        summaryPreview = summary.take(100) + "..."
+                    )
+                ) 
+            }
+        }
+    }
+    
+    // ===== Долговременная память =====
+    
+    private fun toggleMemory(enabled: Boolean) {
+        _uiState.update { 
+            it.copy(memoryState = it.memoryState.copy(isEnabled = enabled)) 
+        }
+        
+        // Сохраняем состояние памяти
+        viewModelScope.launch {
+            preferencesRepository?.saveMemoryEnabled(enabled)
+        }
+    }
+    
+    private fun clearAllMemories() {
+        viewModelScope.launch {
+            memoryRepository?.clearSummary()
+            previousDialogSummary = null
+            _uiState.update { 
+                it.copy(
+                    memoryState = it.memoryState.copy(
+                        hasSummary = false,
+                        summaryPreview = ""
+                    )
+                ) 
+            }
+        }
+    }
+    
+    private fun showMemoryDialog() {
+        _uiState.update { it.copy(showMemoryDialog = true) }
+    }
+    
+    private fun dismissMemoryDialog() {
+        _uiState.update { it.copy(showMemoryDialog = false) }
+    }
+    
+    private fun showAiFeaturesSheet() {
+        _uiState.update { it.copy(showAiFeaturesSheet = true) }
+    }
+    
+    private fun dismissAiFeaturesSheet() {
+        _uiState.update { it.copy(showAiFeaturesSheet = false) }
+    }
+    
+    /**
+     * Получить контекст памяти для агента
+     * Возвращает summary предыдущего диалога если он есть
+     */
+    private suspend fun getMemoryContext(): String {
+        if (!_uiState.value.memoryState.isEnabled) return ""
+        
+        // Используем загруженный summary или получаем из репозитория
+        val summary = previousDialogSummary ?: memoryRepository?.getSavedSummary()
+        
+        if (summary.isNullOrBlank()) return ""
+        
+        return buildString {
+            appendLine("=== КОНТЕКСТ ПРЕДЫДУЩЕГО ДИАЛОГА ===")
+            appendLine()
+            appendLine(summary)
+            appendLine()
+            appendLine("=====================================")
+            appendLine("Учитывай эту информацию о пользователе при ответах.")
         }
     }
     
@@ -654,13 +865,5 @@ class ChatViewModel(
                 )
             )
         }
-        
-        Log.d("ChatViewModel", """
-            Compression stats:
-            - Original: ${result.originalTokens} tokens (${result.originalMessages} messages)
-            - Compressed: ${result.compressedTokens} tokens (summary)
-            - Saved per request: $savedPerRequest tokens
-            - Savings: ${savingsPercent.toInt()}%
-        """.trimIndent())
     }
 }

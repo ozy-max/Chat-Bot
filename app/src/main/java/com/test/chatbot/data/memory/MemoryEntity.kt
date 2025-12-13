@@ -109,6 +109,7 @@ data class MemoryState(
     val isEnabled: Boolean = true,
     val hasSummary: Boolean = false,
     val summaryPreview: String = "",
+    val fullSummaryText: String = "", // Полный текст summary
     val isLoading: Boolean = false
 )
 

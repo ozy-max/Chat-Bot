@@ -41,6 +41,7 @@ class ChatViewModel(
     init {
         loadSavedSettings()
         loadSavedSummary()
+        processPendingMessagesFromKill()
     }
     
     /**
@@ -60,11 +61,73 @@ class ChatViewModel(
                         memoryState = it.memoryState.copy(
                             isEnabled = memoryEnabled,
                             hasSummary = summary != null,
-                            summaryPreview = summary?.take(100)?.plus("...") ?: ""
+                            summaryPreview = summary?.take(100)?.plus("...") ?: "",
+                            fullSummaryText = summary ?: "" // Полный текст summary
                         )
                     ) 
                 }
                 
+            }
+        }
+    }
+    
+    /**
+     * Обработка pending сообщений после kill процесса
+     * Если приложение было убито, создаём summary из сохранённых сообщений
+     */
+    private fun processPendingMessagesFromKill() {
+        viewModelScope.launch {
+            try {
+                val pendingMessages = preferencesRepository?.loadPendingUserMessages() ?: return@launch
+                if (pendingMessages.isEmpty()) return@launch
+                
+                // Проверяем включена ли память
+                val memoryEnabled = preferencesRepository?.loadMemoryEnabled() ?: true
+                if (!memoryEnabled) {
+                    preferencesRepository?.clearPendingUserMessages()
+                    return@launch
+                }
+                
+                Log.d("ChatViewModel", "Found ${pendingMessages.size} pending messages after kill, creating summary...")
+                
+                // Создаём summary из pending сообщений
+                val provider = _uiState.value.selectedProvider
+                val summaryResult = when (provider) {
+                    AiProvider.CLAUDE -> repository.summarizeClaudeHistory(
+                        _uiState.value.apiKey,
+                        pendingMessages.map { ClaudeMessage(role = "user", content = it) }
+                    )
+                    AiProvider.YANDEX_GPT -> repository.summarizeYandexHistory(
+                        _uiState.value.yandexApiKey,
+                        _uiState.value.yandexFolderId,
+                        pendingMessages.map { YandexGptMessage(role = "user", text = it) }
+                    )
+                }
+                
+                summaryResult.onSuccess { result ->
+                    memoryRepository?.saveSummary(result.summary)
+                    previousDialogSummary = result.summary
+                    
+                    _uiState.update { 
+                        it.copy(
+                            memoryState = it.memoryState.copy(
+                                hasSummary = true,
+                                summaryPreview = result.summary.take(100) + "...",
+                                fullSummaryText = result.summary
+                            )
+                        ) 
+                    }
+                    
+                    Log.d("ChatViewModel", "Summary created from pending messages")
+                }.onFailure { error ->
+                    Log.e("ChatViewModel", "Failed to create summary from pending: ${error.message}")
+                }
+                
+                // Очищаем pending сообщения
+                preferencesRepository?.clearPendingUserMessages()
+                
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Error processing pending messages: ${e.message}")
             }
         }
     }
@@ -150,13 +213,25 @@ class ChatViewModel(
     }
     
     /**
-     * Вызывается при уходе приложения в фон (onPause/onStop)
+     * Вызывается при уходе приложения в фон (onPause/onStop) или закрытии
      * Сохраняет summary если память включена
      */
-    private fun onAppPause() {
+    fun onAppPause() {
         // Сохраняем summary если память включена и есть достаточно сообщений
         if (_uiState.value.memoryState.isEnabled && _uiState.value.messages.size >= 2) {
             saveCurrentDialogSummary()
+        }
+    }
+    
+    /**
+     * Сохранить pending сообщения пользователя для восстановления после kill
+     */
+    private fun savePendingUserMessages() {
+        viewModelScope.launch {
+            val userMessages = _uiState.value.messages
+                .filter { it.isUser }
+                .map { it.text }
+            preferencesRepository?.savePendingUserMessages(userMessages)
         }
     }
     
@@ -166,6 +241,11 @@ class ChatViewModel(
         // Добавляем сообщение пользователя в UI
         val userMsg = Message(text = userMessage, isUser = true)
         _uiState.update { it.copy(messages = it.messages + userMsg) }
+        
+        // Сохраняем pending сообщения (для восстановления после kill)
+        if (_uiState.value.memoryState.isEnabled) {
+            savePendingUserMessages()
+        }
         
         // Добавляем в историю в зависимости от провайдера
         when (_uiState.value.selectedProvider) {
@@ -375,34 +455,32 @@ class ChatViewModel(
     
     /**
      * Сохранение summary текущего диалога в долговременную память
+     * Сохраняет ТОЛЬКО информацию от пользователя (не действия ассистента)
      */
     private fun saveCurrentDialogSummary() {
         viewModelScope.launch {
             try {
                 val messages = _uiState.value.messages
-                if (messages.size < 2) return@launch
                 
-                // Формируем текст диалога для суммаризации
-                val dialogText = messages.joinToString("\n\n") { msg ->
-                    val role = if (msg.isUser) "👤 Пользователь" else "🤖 Ассистент"
-                    "$role:\n${msg.text}"
-                }
+                // Берём только сообщения пользователя
+                val userMessages = messages.filter { it.isUser }
+                if (userMessages.isEmpty()) return@launch
                 
-                // Получаем summary через API
+                // Получаем summary через API (передаём только сообщения пользователя)
                 val provider = _uiState.value.selectedProvider
                 val summaryResult = when (provider) {
                     AiProvider.CLAUDE -> repository.summarizeClaudeHistory(
                         _uiState.value.apiKey,
-                        messages.map { ClaudeMessage(
-                            role = if (it.isUser) "user" else "assistant",
+                        userMessages.map { ClaudeMessage(
+                            role = "user",
                             content = it.text
                         )}
                     )
                     AiProvider.YANDEX_GPT -> repository.summarizeYandexHistory(
                         _uiState.value.yandexApiKey,
                         _uiState.value.yandexFolderId,
-                        messages.map { YandexGptMessage(
-                            role = if (it.isUser) "user" else "assistant",
+                        userMessages.map { YandexGptMessage(
+                            role = "user",
                             text = it.text
                         )}
                     )
@@ -411,12 +489,16 @@ class ChatViewModel(
                 summaryResult.onSuccess { result ->
                     memoryRepository?.saveSummary(result.summary)
                     
+                    // Очищаем pending messages т.к. summary создан
+                    preferencesRepository?.clearPendingUserMessages()
+                    
                     // Обновляем UI
                     _uiState.update { 
                         it.copy(
                             memoryState = it.memoryState.copy(
                                 hasSummary = true,
-                                summaryPreview = result.summary.take(100) + "..."
+                                summaryPreview = result.summary.take(100) + "...",
+                                fullSummaryText = result.summary
                             )
                         ) 
                     }
@@ -752,7 +834,8 @@ class ChatViewModel(
                 it.copy(
                     memoryState = it.memoryState.copy(
                         hasSummary = true,
-                        summaryPreview = summary.take(100) + "..."
+                        summaryPreview = summary.take(100) + "...",
+                        fullSummaryText = summary
                     )
                 ) 
             }
@@ -775,12 +858,14 @@ class ChatViewModel(
     private fun clearAllMemories() {
         viewModelScope.launch {
             memoryRepository?.clearSummary()
+            preferencesRepository?.clearPendingUserMessages()
             previousDialogSummary = null
             _uiState.update { 
                 it.copy(
                     memoryState = it.memoryState.copy(
                         hasSummary = false,
-                        summaryPreview = ""
+                        summaryPreview = "",
+                        fullSummaryText = ""
                     )
                 ) 
             }

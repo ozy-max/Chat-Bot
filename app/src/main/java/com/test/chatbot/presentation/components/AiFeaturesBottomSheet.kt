@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -450,44 +451,7 @@ private fun MemoryTabContent(
         if (memoryState.isEnabled) {
             HorizontalDivider(color = Color(0xFF333333))
             
-            // Информация о работе
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                color = Color(0xFF1A1A1A)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "💡 Как это работает",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 14.sp,
-                        color = AccentYellow
-                    )
-                    Text(
-                        text = "• При сворачивании или закрытии приложения автоматически создаётся summary диалога",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.7f),
-                        lineHeight = 18.sp
-                    )
-                    Text(
-                        text = "• Summary сохраняется в SQLite и доступен между сессиями",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.7f),
-                        lineHeight = 18.sp
-                    )
-                    Text(
-                        text = "• При следующем запуске агент получит этот контекст и продолжит разговор с учётом прошлой информации",
-                        fontSize = 12.sp,
-                        color = Color.White.copy(alpha = 0.7f),
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-            
-            // Сохранённый summary
+            // Сохранённый summary - большой виджет с полным текстом
             if (memoryState.hasSummary) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -496,33 +460,86 @@ private fun MemoryTabContent(
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
+                        // Заголовок
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
-                                tint = Color(0xFF4CAF50),
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = "Summary сохранён",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 14.sp,
-                                color = Color(0xFF4CAF50)
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "📝 Сохранённый Summary",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
                         }
                         
-                        if (memoryState.summaryPreview.isNotBlank()) {
-                            Text(
-                                text = memoryState.summaryPreview,
-                                fontSize = 12.sp,
-                                color = Color.White.copy(alpha = 0.6f),
-                                lineHeight = 16.sp
-                            )
+                        // Полный текст summary со скроллом
+                        val summaryText = memoryState.fullSummaryText.ifBlank { 
+                            memoryState.summaryPreview 
+                        }
+                        
+                        if (summaryText.isNotBlank()) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF1A1A1A)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 100.dp, max = 300.dp)
+                                ) {
+                                    val scrollState = androidx.compose.foundation.rememberScrollState()
+                                    
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .verticalScroll(scrollState)
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            text = summaryText,
+                                            fontSize = 13.sp,
+                                            color = Color.White.copy(alpha = 0.85f),
+                                            lineHeight = 20.sp
+                                        )
+                                    }
+                                    
+                                    // Индикатор скролла
+                                    if (scrollState.maxValue > 0) {
+                                        Box(
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(4.dp)
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(0xFF333333).copy(alpha = 0.8f)),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.UnfoldMore,
+                                                contentDescription = "Можно прокручивать",
+                                                tint = Color.White.copy(alpha = 0.6f),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -549,31 +566,36 @@ private fun MemoryTabContent(
                 }
             } else {
                 // Нет сохранённого summary
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(100.dp),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF1A1A1A)
                 ) {
                     Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Storage,
                             contentDescription = null,
                             tint = Color.White.copy(alpha = 0.2f),
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(48.dp)
                         )
                         Text(
                             text = "Память пуста",
-                            fontSize = 14.sp,
-                            color = Color.White.copy(alpha = 0.4f)
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.White.copy(alpha = 0.5f)
                         )
                         Text(
-                            text = "Очистите чат чтобы сохранить диалог",
+                            text = "Summary создастся автоматически при сворачивании приложения или очистке чата",
                             fontSize = 12.sp,
-                            color = Color.White.copy(alpha = 0.3f)
+                            color = Color.White.copy(alpha = 0.3f),
+                            lineHeight = 16.sp,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
                     }
                 }

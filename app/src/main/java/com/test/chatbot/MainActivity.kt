@@ -55,4 +55,24 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    
+    /**
+     * Сохраняем summary при сворачивании приложения
+     */
+    override fun onPause() {
+        super.onPause()
+        if (::viewModel.isInitialized) {
+            viewModel.onAppPause()
+        }
+    }
+    
+    /**
+     * Сохраняем summary при закрытии/остановке приложения
+     */
+    override fun onStop() {
+        super.onStop()
+        if (::viewModel.isInitialized) {
+            viewModel.onAppPause()
+        }
+    }
 }

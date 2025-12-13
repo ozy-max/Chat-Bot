@@ -30,6 +30,8 @@ class PreferencesRepository(private val context: Context) {
         private val SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
         private val MAX_TOKENS = intPreferencesKey("max_tokens")
         private val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
+        // Pending messages для восстановления после kill
+        private val PENDING_USER_MESSAGES = stringPreferencesKey("pending_user_messages")
     }
     
     /**
@@ -146,6 +148,39 @@ class PreferencesRepository(private val context: Context) {
     suspend fun loadMemoryEnabled(): Boolean {
         val preferences = context.dataStore.data.first()
         return preferences[MEMORY_ENABLED] ?: true
+    }
+    
+    /**
+     * Сохранить pending сообщения пользователя (для восстановления после kill)
+     * Сообщения сохраняются через разделитель
+     */
+    suspend fun savePendingUserMessages(messages: List<String>) {
+        context.dataStore.edit { preferences ->
+            if (messages.isEmpty()) {
+                preferences.remove(PENDING_USER_MESSAGES)
+            } else {
+                // Используем специальный разделитель который вряд ли встретится в тексте
+                preferences[PENDING_USER_MESSAGES] = messages.joinToString("|||SEPARATOR|||")
+            }
+        }
+    }
+    
+    /**
+     * Загрузить pending сообщения пользователя
+     */
+    suspend fun loadPendingUserMessages(): List<String> {
+        val preferences = context.dataStore.data.first()
+        val saved = preferences[PENDING_USER_MESSAGES] ?: return emptyList()
+        return saved.split("|||SEPARATOR|||").filter { it.isNotBlank() }
+    }
+    
+    /**
+     * Очистить pending сообщения
+     */
+    suspend fun clearPendingUserMessages() {
+        context.dataStore.edit { preferences ->
+            preferences.remove(PENDING_USER_MESSAGES)
+        }
     }
 }
 

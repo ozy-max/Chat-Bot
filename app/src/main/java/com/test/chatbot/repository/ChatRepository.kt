@@ -303,10 +303,9 @@ class ChatRepository {
         messages: List<ClaudeMessage>
     ): Result<CompressionResult> = withContext(Dispatchers.IO) {
         try {
-            // Формируем текст диалога для суммаризации
+            // Формируем текст из сообщений пользователя
             val conversationText = messages.joinToString("\n\n") { msg ->
-                val role = if (msg.role == "user") "👤 Пользователь" else "🤖 Ассистент"
-                "$role:\n${msg.content}"
+                "• ${msg.content}"
             }
             
             val originalTokens = estimateTokens(conversationText)
@@ -316,7 +315,7 @@ class ChatRepository {
                 messages = listOf(
                     ClaudeMessage(
                         role = "user",
-                        content = "Суммаризируй следующий диалог:\n\n$conversationText"
+                        content = "Извлеки информацию о пользователе из его сообщений:\n\n$conversationText"
                     )
                 ),
                 maxTokens = 1000,
@@ -358,12 +357,11 @@ class ChatRepository {
         messages: List<YandexGptMessage>
     ): Result<CompressionResult> = withContext(Dispatchers.IO) {
         try {
-            // Формируем текст диалога для суммаризации
+            // Формируем текст из сообщений пользователя
             val conversationText = messages
-                .filter { it.role != "system" }
+                .filter { it.role == "user" }
                 .joinToString("\n\n") { msg ->
-                    val role = if (msg.role == "user") "👤 Пользователь" else "🤖 Ассистент"
-                    "$role:\n${msg.text}"
+                    "• ${msg.text}"
                 }
             
             val originalTokens = estimateTokens(conversationText)
@@ -382,7 +380,7 @@ class ChatRepository {
                     ),
                     YandexGptMessage(
                         role = "user",
-                        text = "Суммаризируй следующий диалог:\n\n$conversationText"
+                        text = "Извлеки информацию о пользователе из его сообщений:\n\n$conversationText"
                     )
                 )
             )

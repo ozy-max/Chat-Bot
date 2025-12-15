@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +24,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.test.chatbot.data.memory.MemoryState
+import com.test.chatbot.mcp.McpConnectionResult
+import com.test.chatbot.mcp.McpDemo
+import com.test.chatbot.mcp.McpTool
 import com.test.chatbot.models.CompressionSettings
 import com.test.chatbot.models.CompressionState
 import com.test.chatbot.models.TokenStats
@@ -154,9 +159,9 @@ fun AiFeaturesBottomSheet(
                             Icon(
                                 imageVector = Icons.Default.Compress,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp)
                             )
-                            Text("Компрессия")
+                            Text("Сжатие", fontSize = 12.sp)
                             if (compressionState.isEnabled) {
                                 Badge(
                                     containerColor = Color(0xFF4CAF50)
@@ -180,9 +185,9 @@ fun AiFeaturesBottomSheet(
                             Icon(
                                 imageVector = Icons.Default.Memory,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp)
                             )
-                            Text("Память")
+                            Text("Память", fontSize = 12.sp)
                             if (memoryState.hasSummary) {
                                 Badge(
                                     containerColor = Color(0xFF4CAF50)
@@ -206,9 +211,28 @@ fun AiFeaturesBottomSheet(
                             Icon(
                                 imageVector = Icons.Default.Analytics,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp)
                             )
-                            Text("Токены")
+                            Text("Токены", fontSize = 12.sp)
+                        }
+                    },
+                    selectedContentColor = AccentYellow,
+                    unselectedContentColor = Color.White.copy(alpha = 0.5f)
+                )
+                Tab(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    text = {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Extension,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text("MCP", fontSize = 12.sp)
                         }
                     },
                     selectedContentColor = AccentYellow,
@@ -238,6 +262,8 @@ fun AiFeaturesBottomSheet(
                     )
                     2 -> TokenStatsTabContent(
                         tokenStats = tokenStats
+                    )
+                    3 -> McpTabContent(
                     )
                 }
             }
@@ -785,4 +811,268 @@ private fun TokenStatRow(
     }
 }
 
+@Composable
+private fun McpTabContent() {
+    var isLoading by remember { mutableStateOf(false) }
+    var mcpResult by remember { mutableStateOf<McpConnectionResult?>(null) }
+    var serverUrl by remember { mutableStateOf("") }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Заголовок
+        Text(
+            text = "🔌 MCP (Model Context Protocol)",
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp,
+            color = Color.White
+        )
+        
+        Text(
+            text = "Подключение к внешним инструментам через MCP",
+            fontSize = 12.sp,
+            color = Color.White.copy(alpha = 0.6f)
+        )
+        
+        HorizontalDivider(color = Color(0xFF333333))
+        
+        // Поле ввода URL сервера
+        OutlinedTextField(
+            value = serverUrl,
+            onValueChange = { serverUrl = it },
+            label = { Text("URL MCP сервера") },
+            placeholder = { Text("http://localhost:3000/mcp") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AccentYellow,
+                unfocusedBorderColor = Color(0xFF333333),
+                focusedLabelColor = AccentYellow,
+                unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                cursorColor = AccentYellow
+            )
+        )
+        
+        // Кнопки
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Кнопка подключения к реальному серверу
+            Button(
+                onClick = {
+                    if (serverUrl.isNotBlank()) {
+                        isLoading = true
+                        McpDemo.connectAndListTools(serverUrl) { result ->
+                            mcpResult = result
+                            isLoading = false
+                        }
+                    }
+                },
+                modifier = Modifier.weight(1f),
+                enabled = !isLoading && serverUrl.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentYellow.copy(alpha = 0.15f),
+                    contentColor = AccentYellow
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = AccentYellow,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Link,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Подключить")
+            }
+            
+            // Кнопка демо
+            OutlinedButton(
+                onClick = {
+                    isLoading = true
+                    McpDemo.demoWithMockServer { result ->
+                        mcpResult = result
+                        isLoading = false
+                    }
+                },
+                enabled = !isLoading,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = Color(0xFF64B5F6)
+                ),
+                border = ButtonDefaults.outlinedButtonBorder.copy(
+                    brush = androidx.compose.ui.graphics.SolidColor(Color(0xFF64B5F6).copy(alpha = 0.5f))
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("Демо")
+            }
+        }
+        
+        // Результат
+        mcpResult?.let { result ->
+            when (result) {
+                is McpConnectionResult.Success -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFF4CAF50).copy(alpha = 0.1f)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4CAF50),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Text(
+                                    text = "Подключено: ${result.serverName}",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp,
+                                    color = Color(0xFF4CAF50)
+                                )
+                            }
+                            
+                            result.serverVersion?.let { version ->
+                                Text(
+                                    text = "Версия: $version",
+                                    fontSize = 12.sp,
+                                    color = Color.White.copy(alpha = 0.6f)
+                                )
+                            }
+                            
+                            HorizontalDivider(color = Color(0xFF333333))
+                            
+                            Text(
+                                text = "📦 Доступные инструменты (${result.tools.size}):",
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 14.sp,
+                                color = AccentYellow
+                            )
+                            
+                            // Список инструментов со скроллом
+                            if (result.tools.isNotEmpty()) {
+                                val scrollState = androidx.compose.foundation.rememberScrollState()
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(min = 100.dp, max = 300.dp)
+                                        .verticalScroll(scrollState)
+                                        .padding(vertical = 8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    result.tools.forEach { tool ->
+                                        McpToolItem(tool)
+                                    }
+                                }
+                            } else {
+                                Text(
+                                    text = "Нет инструментов",
+                                    fontSize = 12.sp,
+                                    color = Color.White.copy(alpha = 0.5f),
+                                    modifier = Modifier.padding(vertical = 16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+                
+                is McpConnectionResult.Error -> {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.Red.copy(alpha = 0.1f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Error,
+                                contentDescription = null,
+                                tint = Color.Red,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Text(
+                                text = result.message,
+                                fontSize = 13.sp,
+                                color = Color.Red.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+        
+    }
+}
 
+@Composable
+private fun McpToolItem(tool: McpTool) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFF1A1A1A)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(text = "🔧", fontSize = 14.sp)
+                Text(
+                    text = tool.name,
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = Color.White
+                )
+            }
+            
+            tool.description?.let { desc ->
+                Text(
+                    text = desc,
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.6f),
+                    lineHeight = 14.sp
+                )
+            }
+            
+            tool.inputSchema?.properties?.let { props ->
+                if (props.isNotEmpty()) {
+                    Text(
+                        text = "Параметры: ${props.keys.joinToString(", ")}",
+                        fontSize = 10.sp,
+                        color = AccentYellow.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+    }
+}

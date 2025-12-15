@@ -817,9 +817,12 @@ private fun McpTabContent() {
     var mcpResult by remember { mutableStateOf<McpConnectionResult?>(null) }
     var serverUrl by remember { mutableStateOf("") }
     
+    val scrollState = androidx.compose.foundation.rememberScrollState()
+    
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(scrollState)
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -856,73 +859,40 @@ private fun McpTabContent() {
             )
         )
         
-        // Кнопки
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Кнопка подключения к реальному серверу
-            Button(
-                onClick = {
-                    if (serverUrl.isNotBlank()) {
-                        isLoading = true
-                        McpDemo.connectAndListTools(serverUrl) { result ->
-                            mcpResult = result
-                            isLoading = false
-                        }
-                    }
-                },
-                modifier = Modifier.weight(1f),
-                enabled = !isLoading && serverUrl.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentYellow.copy(alpha = 0.15f),
-                    contentColor = AccentYellow
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = AccentYellow,
-                        strokeWidth = 2.dp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Link,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Подключить")
-            }
-            
-            // Кнопка демо
-            OutlinedButton(
-                onClick = {
+        // Кнопка подключения
+        Button(
+            onClick = {
+                if (serverUrl.isNotBlank()) {
                     isLoading = true
-                    McpDemo.demoWithMockServer { result ->
+                    McpDemo.connectAndListTools(serverUrl) { result ->
                         mcpResult = result
                         isLoading = false
                     }
-                },
-                enabled = !isLoading,
-                colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = Color(0xFF64B5F6)
-                ),
-                border = ButtonDefaults.outlinedButtonBorder.copy(
-                    brush = androidx.compose.ui.graphics.SolidColor(Color(0xFF64B5F6).copy(alpha = 0.5f))
-                ),
-                shape = RoundedCornerShape(12.dp)
-            ) {
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading && serverUrl.isNotBlank(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = AccentYellow.copy(alpha = 0.15f),
+                contentColor = AccentYellow
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(18.dp),
+                    color = AccentYellow,
+                    strokeWidth = 2.dp
+                )
+            } else {
                 Icon(
-                    imageVector = Icons.Default.PlayArrow,
+                    imageVector = Icons.Default.Link,
                     contentDescription = null,
                     modifier = Modifier.size(18.dp)
                 )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Демо")
             }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Подключить")
         }
         
         // Результат
@@ -973,20 +943,13 @@ private fun McpTabContent() {
                                 color = AccentYellow
                             )
                             
-                            // Список инструментов со скроллом
+                            // Список инструментов
                             if (result.tools.isNotEmpty()) {
-                                val scrollState = androidx.compose.foundation.rememberScrollState()
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .heightIn(min = 100.dp, max = 300.dp)
-                                        .verticalScroll(scrollState)
-                                        .padding(vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    result.tools.forEach { tool ->
-                                        McpToolItem(tool)
-                                    }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                result.tools.forEach { tool ->
+                                    McpToolItem(tool)
+                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
                             } else {
                                 Text(

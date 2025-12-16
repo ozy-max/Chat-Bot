@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-MCP HTTP Test Server
+MCP HTTP Test Server с реальным API погоды
 Запуск: python3 server.py
 """
 
@@ -9,6 +9,8 @@ import json
 import socket
 import random
 from datetime import datetime
+import urllib.request
+import urllib.parse
 
 # Список инструментов
 TOOLS = [
@@ -59,15 +61,48 @@ TOOLS = [
     }
 ]
 
+def get_real_weather(city):
+    """Получить реальную погоду через wttr.in API"""
+    try:
+        # wttr.in - бесплатное API без ключа
+        city_encoded = urllib.parse.quote(city)
+        url = f"https://wttr.in/{city_encoded}?format=j1"
+        
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'Mozilla/5.0')
+        
+        with urllib.request.urlopen(req, timeout=15) as response:
+            data = json.loads(response.read().decode())
+            
+            current = data['current_condition'][0]
+            temp = current['temp_C']
+            feels_like = current['FeelsLikeC']
+            humidity = current['humidity']
+            weather_desc = current['weatherDesc'][0]['value']
+            wind_speed = current['windspeedKmph']
+            
+            return f"""🌍 Реальная погода в {city}:
+🌡️ Температура: {temp}°C (ощущается как {feels_like}°C)
+☁️ Условия: {weather_desc}
+💧 Влажность: {humidity}%
+💨 Ветер: {wind_speed} км/ч
+✅ Данные получены с wttr.in API"""
+    except Exception as e:
+        # Fallback на демо данные
+        return f"""🌍 Демо погода для {city}:
+🌡️ Температура: {random.randint(15, 25)}°C
+☁️ Условия: Переменная облачность
+💧 Влажность: {random.randint(40, 70)}%
+⚠️ Примечание: Реальное API недоступно ({str(e)[:50]})"""
+
 def handle_tool_call(name, args):
     """Обработка вызова инструмента"""
     args = args or {}
     
     if name == "get_weather":
-        city = args.get("city", "Unknown")
-        temp = random.randint(-5, 30)
-        conditions = random.choice(["☀️ Солнечно", "☁️ Облачно", "🌧️ Дождь", "❄️ Снег"])
-        return {"content": [{"type": "text", "text": f"Погода в {city}: {temp}°C, {conditions}"}]}
+        city = args.get("city", "Moscow")
+        weather_info = get_real_weather(city)
+        return {"content": [{"type": "text", "text": weather_info}]}
     
     elif name == "get_time":
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")

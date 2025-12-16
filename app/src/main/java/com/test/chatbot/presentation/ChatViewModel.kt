@@ -38,6 +38,10 @@ class ChatViewModel(
     // Загруженный summary предыдущего диалога
     private var previousDialogSummary: String? = null
     
+    // MCP клиент и инструменты
+    private var mcpClient: com.test.chatbot.mcp.McpClient? = null
+    private var mcpTools = listOf<com.test.chatbot.mcp.McpTool>()
+    
     init {
         loadSavedSettings()
         loadSavedSummary()
@@ -237,6 +241,12 @@ class ChatViewModel(
     
     private fun sendMessage(userMessage: String) {
         if (userMessage.isBlank()) return
+        
+        // Проверяем MCP команды
+        if (userMessage.startsWith("/weather ")) {
+            handleMcpCommand(userMessage)
+            return
+        }
         
         // Добавляем сообщение пользователя в UI
         val userMsg = Message(text = userMessage, isUser = true)
@@ -950,5 +960,84 @@ class ChatViewModel(
                 )
             )
         }
+    }
+    
+    /**
+     * Обработка MCP команд (/weather City)
+     */
+    private fun handleMcpCommand(command: String) {
+        // Добавляем команду пользователя в UI
+        val userMsg = Message(text = command, isUser = true)
+        _uiState.update { it.copy(messages = it.messages + userMsg, isLoading = true) }
+        
+        viewModelScope.launch {
+            try {
+                // Извлекаем параметры
+                val city = command.removePrefix("/weather ").trim()
+                
+                if (city.isBlank()) {
+                    addBotMessage("❌ Укажите название города: /weather Москва")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return@launch
+                }
+                
+                // Подключаемся к MCP серверу
+                if (mcpClient == null) {
+                    val serverUrl = "http://10.0.2.2:3000/mcp"
+                    mcpClient = com.test.chatbot.mcp.McpClient.createHttpClient(serverUrl)
+                    
+                    // Инициализация
+                    mcpClient?.initialize()?.onFailure {
+                        addBotMessage("❌ Ошибка подключения к MCP: ${it.message}")
+                        _uiState.update { it.copy(isLoading = false) }
+                        return@launch
+                    }
+                }
+                
+                // Вызываем MCP инструмент
+                val result = mcpClient?.callTool("get_weather", mapOf("city" to city))
+                
+                result?.onSuccess { toolResult ->
+                    val weatherText = toolResult.content.firstOrNull()?.text ?: "Нет данных"
+                    
+                    // Добавляем результат как системное сообщение
+                    val toolMsg = Message(text = "🔧 MCP инструмент:\n$weatherText", isUser = false)
+                    _uiState.update { it.copy(messages = it.messages + toolMsg) }
+                    
+                    // Создаём промпт для агента с результатом
+                    val aiPrompt = "Пользователь спросил про погоду в городе $city. Вот данные от инструмента погоды:\n\n$weatherText\n\nСкажи пользователю о погоде обычными словами."
+                    
+                    // Добавляем в историю и отправляем агенту
+                    when (_uiState.value.selectedProvider) {
+                        AiProvider.CLAUDE -> {
+                            claudeHistory.add(ClaudeMessage(role = "user", content = aiPrompt))
+                            sendToClaude()
+                        }
+                        AiProvider.YANDEX_GPT -> {
+                            if (yandexHistory.isEmpty()) {
+                                yandexHistory.add(YandexGptMessage(
+                                    role = "system",
+                                    text = "Ты — универсальный ИИ-ассистент. Отвечай на русском языке."
+                                ))
+                            }
+                            yandexHistory.add(YandexGptMessage(role = "user", text = aiPrompt))
+                            sendToYandexGpt()
+                        }
+                    }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка вызова инструмента: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+                
+            } catch (e: Exception) {
+                addBotMessage("❌ Ошибка: ${e.message}")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    private fun addBotMessage(text: String) {
+        val botMsg = Message(text = text, isUser = false)
+        _uiState.update { it.copy(messages = it.messages + botMsg) }
     }
 }

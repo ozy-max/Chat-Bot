@@ -43,5 +43,8 @@ data class ChatUiState(
     val showMemoryDialog: Boolean = false,
     
     // AI Features Bottom Sheet
-    val showAiFeaturesSheet: Boolean = false
+    val showAiFeaturesSheet: Boolean = false,
+    
+    // MCP
+    val mcpServerUrl: String = "http://10.0.2.2:3000/mcp" // URL по умолчанию для эмулятора
 )

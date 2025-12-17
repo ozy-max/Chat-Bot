@@ -991,6 +991,68 @@ private fun McpTabContent() {
             }
         }
         
+        // Секция команд
+        HorizontalDivider(color = Color(0xFF333333))
+        
+        Text(
+            text = "💡 Доступные команды",
+            fontWeight = FontWeight.Bold,
+            fontSize = 14.sp,
+            color = AccentYellow
+        )
+        
+        // Команды погоды
+        CommandCard(
+            title = "🌤️ Погода",
+            command = "/weather <город>",
+            description = "Получить текущую погоду",
+            example = "/weather Москва"
+        )
+        
+        // Команды задач
+        CommandCard(
+            title = "📝 Добавить задачу",
+            command = "/task add <название>",
+            description = "Создать новую задачу",
+            example = "/task add Купить продукты"
+        )
+        
+        CommandCard(
+            title = "📋 Список задач",
+            command = "/task list [pending/completed]",
+            description = "Показать все задачи",
+            example = "/task list"
+        )
+        
+        CommandCard(
+            title = "✅ Завершить задачу",
+            command = "/task complete <id>",
+            description = "Отметить задачу выполненной",
+            example = "/task complete 1"
+        )
+        
+        CommandCard(
+            title = "📊 Сводка задач",
+            command = "/summary",
+            description = "Статистика задач за сегодня",
+            example = "/summary"
+        )
+        
+        CommandCard(
+            title = "🔄 Синхронизация с Трекером",
+            command = "/sync",
+            description = "Импортировать задачи из Яндекс.Трекера",
+            example = "/sync"
+        )
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        Text(
+            text = "💡 Совет: Агент автоматически синхронизирует задачи и отправляет сводку в 18:00",
+            fontSize = 11.sp,
+            color = Color.White.copy(alpha = 0.5f),
+            modifier = Modifier.padding(horizontal = 8.dp)
+        )
     }
 }
 
@@ -1033,6 +1095,81 @@ private fun McpToolItem(tool: McpTool) {
                         text = "Параметры: ${props.keys.joinToString(", ")}",
                         fontSize = 10.sp,
                         color = AccentYellow.copy(alpha = 0.7f)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CommandCard(
+    title: String,
+    command: String,
+    description: String,
+    example: String
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        color = Color(0xFF1A1A1A),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF333333))
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = title,
+                fontWeight = FontWeight.Medium,
+                fontSize = 13.sp,
+                color = Color.White
+            )
+            
+            Text(
+                text = description,
+                fontSize = 11.sp,
+                color = Color.White.copy(alpha = 0.6f)
+            )
+            
+            Surface(
+                shape = RoundedCornerShape(6.dp),
+                color = Color(0xFF2A2A2A)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Синтаксис:",
+                        fontSize = 9.sp,
+                        color = Color.White.copy(alpha = 0.4f)
+                    )
+                    Text(
+                        text = command,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = AccentYellow,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    )
+                    
+                    androidx.compose.material3.HorizontalDivider(
+                        color = Color(0xFF333333),
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                    
+                    Text(
+                        text = "Пример:",
+                        fontSize = 9.sp,
+                        color = Color.White.copy(alpha = 0.4f)
+                    )
+                    Text(
+                        text = example,
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                     )
                 }
             }

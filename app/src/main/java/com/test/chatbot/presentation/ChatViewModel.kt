@@ -46,6 +46,41 @@ class ChatViewModel(
         loadSavedSettings()
         loadSavedSummary()
         processPendingMessagesFromKill()
+        connectToMcpServer() // Автоматическое подключение к MCP при запуске
+    }
+    
+    /**
+     * Подключение к MCP серверу
+     */
+    private fun connectToMcpServer() {
+        viewModelScope.launch {
+            try {
+                val serverUrl = _uiState.value.mcpServerUrl
+                if (serverUrl.isBlank()) {
+                    Log.e("ChatViewModel", "MCP server URL not configured")
+                    return@launch
+                }
+                
+                Log.e("ChatViewModel", "Connecting to MCP server: $serverUrl")
+                mcpClient = com.test.chatbot.mcp.McpClient.createHttpClient(serverUrl)
+                
+                mcpClient?.initialize()?.onSuccess { result ->
+                    Log.e("ChatViewModel", "MCP connected successfully: ${result.serverInfo?.name}")
+                    
+                    // Получаем список инструментов
+                    mcpClient?.listTools()?.onSuccess { tools ->
+                        mcpTools = tools
+                        Log.e("ChatViewModel", "MCP tools loaded: ${tools.size}")
+                    }
+                }?.onFailure {
+                    Log.e("ChatViewModel", "MCP connection failed: ${it.message}")
+                    mcpClient = null
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "MCP connection error: ${e.message}")
+                mcpClient = null
+            }
+        }
     }
     
     /**
@@ -242,8 +277,8 @@ class ChatViewModel(
     private fun sendMessage(userMessage: String) {
         if (userMessage.isBlank()) return
         
-        // Проверяем MCP команды
-        if (userMessage.startsWith("/weather ")) {
+        // Проверяем все MCP команды
+        if (userMessage.startsWith("/")) {
             handleMcpCommand(userMessage)
             return
         }
@@ -972,18 +1007,15 @@ class ChatViewModel(
         
         viewModelScope.launch {
             try {
-                // Извлекаем параметры
-                val city = command.removePrefix("/weather ").trim()
-                
-                if (city.isBlank()) {
-                    addBotMessage("❌ Укажите название города: /weather Москва")
-                    _uiState.update { it.copy(isLoading = false) }
-                    return@launch
-                }
-                
                 // Подключаемся к MCP серверу
                 if (mcpClient == null) {
-                    val serverUrl = "http://10.0.2.2:3000/mcp"
+                    val serverUrl = _uiState.value.mcpServerUrl
+                    if (serverUrl.isBlank()) {
+                        addBotMessage("❌ Не указан URL MCP сервера. Подключитесь через меню.")
+                        _uiState.update { it.copy(isLoading = false) }
+                        return@launch
+                    }
+                    
                     mcpClient = com.test.chatbot.mcp.McpClient.createHttpClient(serverUrl)
                     
                     // Инициализация
@@ -994,40 +1026,171 @@ class ChatViewModel(
                     }
                 }
                 
-                // Вызываем MCP инструмент
-                val result = mcpClient?.callTool("get_weather", mapOf("city" to city))
+                // Парсинг команды
+                val parts = command.trim().split(" ", limit = 3)
+                val mainCommand = parts[0].removePrefix("/")
                 
-                result?.onSuccess { toolResult ->
-                    val weatherText = toolResult.content.firstOrNull()?.text ?: "Нет данных"
-                    
-                    // Создаём промпт для агента с результатом
-                    val aiPrompt = "Пользователь спросил про погоду в городе $city. Вот данные от MCP инструмента:\n\n$weatherText\n\nОтветь пользователю о погоде обычными словами. ОБЯЗАТЕЛЬНО начни ответ с префикса '🔧 [MCP] ' чтобы показать что данные получены через MCP инструмент."
-                    
-                    // Добавляем в историю и отправляем агенту
-                    when (_uiState.value.selectedProvider) {
-                        AiProvider.CLAUDE -> {
-                            claudeHistory.add(ClaudeMessage(role = "user", content = aiPrompt))
-                            sendToClaude()
+                when (mainCommand) {
+                    "weather" -> {
+                        val city = parts.getOrNull(1)?.trim() ?: ""
+                        if (city.isBlank()) {
+                            addBotMessage("❌ Укажите название города: /weather Москва")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
                         }
-                        AiProvider.YANDEX_GPT -> {
-                            if (yandexHistory.isEmpty()) {
-                                yandexHistory.add(YandexGptMessage(
-                                    role = "system",
-                                    text = "Ты — универсальный ИИ-ассистент. Отвечай на русском языке."
-                                ))
-                            }
-                            yandexHistory.add(YandexGptMessage(role = "user", text = aiPrompt))
-                            sendToYandexGpt()
-                        }
+                        handleWeatherCommand(city)
                     }
-                }?.onFailure {
-                    addBotMessage("❌ Ошибка вызова инструмента: ${it.message}")
-                    _uiState.update { it.copy(isLoading = false) }
+                    
+                    "task" -> {
+                        val subCommand = parts.getOrNull(1)?.trim() ?: ""
+                        val args = parts.getOrNull(2)?.trim() ?: ""
+                        handleTaskCommand(subCommand, args)
+                    }
+                    
+                    "summary" -> {
+                        handleSummaryCommand()
+                    }
+                    
+                    "sync" -> {
+                        handleSyncCommand()
+                    }
+                    
+                    else -> {
+                        addBotMessage("❌ Неизвестная команда. Доступны: /weather, /task, /summary, /sync")
+                        _uiState.update { it.copy(isLoading = false) }
+                    }
                 }
                 
             } catch (e: Exception) {
                 addBotMessage("❌ Ошибка: ${e.message}")
                 _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    private suspend fun handleWeatherCommand(city: String) {
+        val result = mcpClient?.callTool("get_weather", mapOf("city" to city))
+        
+        result?.onSuccess { toolResult ->
+            val weatherText = toolResult.content.firstOrNull()?.text ?: "Нет данных"
+            
+            val aiPrompt = "Пользователь спросил про погоду в городе $city. Вот данные от MCP инструмента:\n\n$weatherText\n\nОтветь пользователю о погоде обычными словами. ОБЯЗАТЕЛЬНО начни ответ с префикса '🔧 [MCP] ' чтобы показать что данные получены через MCP инструмент."
+            
+            sendToAi(aiPrompt)
+        }?.onFailure {
+            addBotMessage("❌ Ошибка вызова инструмента: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleTaskCommand(subCommand: String, args: String) {
+        when (subCommand) {
+            "add" -> {
+                if (args.isBlank()) {
+                    addBotMessage("❌ Укажите название задачи: /task add Купить молоко")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val result = mcpClient?.callTool("add_task", mapOf("title" to args))
+                result?.onSuccess { toolResult ->
+                    val resultText = toolResult.content.firstOrNull()?.text ?: "Задача добавлена"
+                    val aiPrompt = "Пользователь добавил задачу. Результат от MCP:\n\n$resultText\n\nПодтверди добавление задачи пользователю. ОБЯЗАТЕЛЬНО начни ответ с префикса '🔧 [MCP] '"
+                    sendToAi(aiPrompt)
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "list" -> {
+                val status = if (args.isNotBlank()) args else null
+                val params = if (status != null) mapOf("status" to status) else emptyMap()
+                
+                val result = mcpClient?.callTool("list_tasks", params)
+                result?.onSuccess { toolResult ->
+                    val taskList = toolResult.content.firstOrNull()?.text ?: "Нет задач"
+                    val aiPrompt = "Пользователь запросил список задач. Данные от MCP:\n\n$taskList\n\nПокажи список задач пользователю. ОБЯЗАТЕЛЬНО начни ответ с префикса '🔧 [MCP] '"
+                    sendToAi(aiPrompt)
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "complete" -> {
+                if (args.isBlank()) {
+                    addBotMessage("❌ Укажите ID задачи: /task complete 1")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val taskId = args.toIntOrNull()
+                if (taskId == null) {
+                    addBotMessage("❌ ID задачи должен быть числом")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val result = mcpClient?.callTool("complete_task", mapOf("task_id" to taskId))
+                result?.onSuccess { toolResult ->
+                    val resultText = toolResult.content.firstOrNull()?.text ?: "Задача завершена"
+                    val aiPrompt = "Пользователь завершил задачу #$taskId. Результат от MCP:\n\n$resultText\n\nПоздравь пользователя с выполнением задачи. ОБЯЗАТЕЛЬНО начни ответ с префикса '🔧 [MCP] '"
+                    sendToAi(aiPrompt)
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            else -> {
+                addBotMessage("❌ Команды /task: add, list, complete\nПример: /task add Купить продукты")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    private suspend fun handleSummaryCommand() {
+        val result = mcpClient?.callTool("get_summary", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val summaryText = toolResult.content.firstOrNull()?.text ?: "Нет данных"
+            val aiPrompt = "Пользователь запросил сводку задач за сегодня. Данные от MCP:\n\n$summaryText\n\nПокажи сводку пользователю. ОБЯЗАТЕЛЬНО начни ответ с префикса '🔧 [MCP] '"
+            sendToAi(aiPrompt)
+        }?.onFailure {
+            addBotMessage("❌ Ошибка: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleSyncCommand() {
+        val result = mcpClient?.callTool("sync_todoist", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            // Короткое сообщение об успешной синхронизации
+            addBotMessage("🔧 [MCP] Синхронизация [Todoist] завершена успешно.")
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun sendToAi(prompt: String) {
+        when (_uiState.value.selectedProvider) {
+            AiProvider.CLAUDE -> {
+                claudeHistory.add(ClaudeMessage(role = "user", content = prompt))
+                sendToClaude()
+            }
+            AiProvider.YANDEX_GPT -> {
+                if (yandexHistory.isEmpty()) {
+                    yandexHistory.add(YandexGptMessage(
+                        role = "system",
+                        text = "Ты — универсальный ИИ-ассистент. Отвечай на русском языке."
+                    ))
+                }
+                yandexHistory.add(YandexGptMessage(role = "user", text = prompt))
+                sendToYandexGpt()
             }
         }
     }

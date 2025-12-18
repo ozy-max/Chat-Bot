@@ -1088,8 +1088,22 @@ class ChatViewModel(
                         handleSyncCommand()
                     }
                     
+                    "pipeline" -> {
+                        val searchQuery = parts.drop(1).joinToString(" ").trim()
+                        if (searchQuery.isBlank()) {
+                            addBotMessage("❌ Укажите запрос для поиска: /pipeline найди статьи о квантовых компьютерах")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handlePipelineCommand(searchQuery)
+                    }
+                    
+                    "files" -> {
+                        handleFilesCommand()
+                    }
+                    
                     else -> {
-                        addBotMessage("❌ Неизвестная команда. Доступны: /weather, /task, /summary, /sync")
+                        addBotMessage("❌ Неизвестная команда. Доступны: /weather, /task, /summary, /sync, /pipeline, /files")
                         _uiState.update { it.copy(isLoading = false) }
                     }
                 }
@@ -1211,6 +1225,106 @@ class ChatViewModel(
             _uiState.update { it.copy(isLoading = false) }
         }?.onFailure {
             addBotMessage("❌ Ошибка: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleFilesCommand() {
+        val result = mcpClient?.callTool("list_files", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val filesText = toolResult.content.firstOrNull()?.text ?: "Нет файлов"
+            addBotMessage("📁 Сохранённые файлы:\n\n$filesText")
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения списка файлов: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handlePipelineCommand(searchQuery: String) {
+        val result = mcpClient?.callTool("run_pipeline", mapOf(
+            "search_query" to searchQuery,
+            "summary_prompt" to "Создай краткую выжимку из найденных статей"
+        ))
+        
+        result?.onSuccess { toolResult ->
+            val pipelineText = toolResult.content.firstOrNull()?.text ?: "Пайплайн завершён"
+            val lines = pipelineText.lines()
+            
+            Log.e("ChatViewModel", "Pipeline result:\n$pipelineText")
+            
+            // Парсим JSON результат для получения searchResults
+            val pipelineResult = try {
+                com.google.gson.Gson().fromJson(pipelineText, com.test.chatbot.mcp.server.PipelineResult::class.java)
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "Failed to parse pipeline result as JSON: ${e.message}")
+                Log.e("ChatViewModel", "Pipeline text was: $pipelineText")
+                null
+            }
+            
+            if (pipelineResult != null) {
+                Log.i("ChatViewModel", "Pipeline result parsed successfully")
+                Log.i("ChatViewModel", "Search results count: ${pipelineResult.searchResults?.size ?: 0}")
+                pipelineResult.searchResults?.forEach {
+                    Log.i("ChatViewModel", "  - ${it.title}: ${it.url}")
+                }
+            }
+            
+            val finalMessage = buildString {
+                // Показываем источники из searchResults
+                val searchResults = pipelineResult?.searchResults
+                if (searchResults != null && searchResults.isNotEmpty()) {
+                    append("📚 Источники:\n")
+                    searchResults.forEachIndexed { index, result ->
+                        // URL уже декодирован в PipelineAgent
+                        val fullUrl = if (!result.url.startsWith("http://") && !result.url.startsWith("https://")) {
+                            "https://${result.url}"
+                        } else {
+                            result.url
+                        }
+                        
+                        append("${index + 1}. ${result.title}\n")
+                        // MessageTextWithLinks автоматически извлечёт домен и сделает его кликабельным
+                        append("$fullUrl\n\n")
+                    }
+                }
+                
+                // Показываем суммаризацию
+                val summaryText = pipelineResult?.summaryText
+                if (summaryText != null && summaryText.isNotBlank()) {
+                    append("📝 Выжимка:\n$summaryText\n\n")
+                }
+                
+                // Показываем путь к файлу
+                val filePath = pipelineResult?.finalResult
+                if (filePath != null) {
+                    Log.e("ChatViewModel", "File saved at: $filePath")
+                    append("📁 [FILE:$filePath]Результат[/FILE] сохранён локально\n\n")
+                }
+                
+                // Извлекаем информацию о задаче в Todoist из steps
+                val todoistStep = pipelineResult?.steps?.find { it.name == "create_todoist_task" }
+                if (todoistStep != null) {
+                    if (todoistStep.status == "completed") {
+                        append("✅ Задача создана в Todoist")
+                    } else if (todoistStep.status == "failed") {
+                        append("⚠️ Задача в Todoist не создана")
+                    }
+                }
+            }
+            
+            if (finalMessage.isNotBlank()) {
+                Log.e("ChatViewModel", "Final message to display:\n$finalMessage")
+                addBotMessage(finalMessage.trim())
+            } else {
+                Log.e("ChatViewModel", "Final message is blank!")
+                Log.e("ChatViewModel", "Pipeline result: $pipelineResult")
+            }
+            
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка пайплайна: ${it.message}")
             _uiState.update { it.copy(isLoading = false) }
         }
     }

@@ -54,6 +54,55 @@ object ToolsUtils {
                 ),
                 required = emptyList()
             )
+        ),
+        Tool(
+            name = "search_web",
+            description = "Поиск статей в интернете по запросу. Используй этот инструмент когда пользователь хочет найти информацию в интернете.",
+            inputSchema = InputSchema(
+                type = "object",
+                properties = mapOf(
+                    "query" to Property(
+                        type = "string",
+                        description = "Поисковый запрос"
+                    ),
+                    "max_results" to Property(
+                        type = "number",
+                        description = "Максимальное количество результатов (по умолчанию 3)"
+                    )
+                ),
+                required = listOf("query")
+            )
+        ),
+        Tool(
+            name = "run_pipeline",
+            description = "Запустить автоматический пайплайн: поиск статей в интернете → суммаризация → сохранение в файл. Используй когда нужно найти, обработать и сохранить информацию.",
+            inputSchema = InputSchema(
+                type = "object",
+                properties = mapOf(
+                    "search_query" to Property(
+                        type = "string",
+                        description = "Запрос для поиска статей в интернете"
+                    ),
+                    "summary_prompt" to Property(
+                        type = "string",
+                        description = "Промпт для суммаризации (опционально)"
+                    ),
+                    "filename" to Property(
+                        type = "string",
+                        description = "Имя файла для сохранения результата (опционально)"
+                    )
+                ),
+                required = listOf("search_query")
+            )
+        ),
+        Tool(
+            name = "list_files",
+            description = "Получить список всех сохранённых файлов результатов пайплайна. Используй когда пользователь спрашивает о сохранённых файлах.",
+            inputSchema = InputSchema(
+                type = "object",
+                properties = mapOf(),
+                required = emptyList()
+            )
         )
     )
     

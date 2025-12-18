@@ -26,6 +26,9 @@ class McpServer(
     private lateinit var taskRepository: TaskRepository
     private lateinit var todoistService: TodoistService
     private lateinit var schedulerManager: SchedulerManager
+    private lateinit var webSearchService: WebSearchService
+    private lateinit var fileStorageService: FileStorageService
+    private lateinit var pipelineAgent: PipelineAgent
 
     companion object {
         private const val TAG = "McpServer"
@@ -44,6 +47,10 @@ class McpServer(
                 todoistService = todoistService,
                 scope = scope
             )
+            
+            webSearchService = WebSearchService()
+            fileStorageService = FileStorageService(context)
+            pipelineAgent = PipelineAgent(context, todoistService)
             
             Log.i(TAG, "✅ MCP Server инициализирован на порту $port")
         } catch (e: Exception) {
@@ -255,6 +262,73 @@ class McpServer(
                         "properties" to mapOf<String, Any>(),
                         "required" to emptyList<String>()
                     )
+                ),
+                mapOf(
+                    "name" to "search_web",
+                    "description" to "Поиск статей в интернете по запросу",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "query" to mapOf(
+                                "type" to "string",
+                                "description" to "Поисковый запрос"
+                            ),
+                            "max_results" to mapOf(
+                                "type" to "number",
+                                "description" to "Максимальное количество результатов (по умолчанию 3)"
+                            )
+                        ),
+                        "required" to listOf("query")
+                    )
+                ),
+                mapOf(
+                    "name" to "save_to_file",
+                    "description" to "Сохранить текст в файл",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "content" to mapOf(
+                                "type" to "string",
+                                "description" to "Содержимое файла"
+                            ),
+                            "filename" to mapOf(
+                                "type" to "string",
+                                "description" to "Имя файла (опционально)"
+                            )
+                        ),
+                        "required" to listOf("content")
+                    )
+                ),
+                mapOf(
+                    "name" to "run_pipeline",
+                    "description" to "Запустить автоматический пайплайн: поиск → суммаризация → сохранение",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "search_query" to mapOf(
+                                "type" to "string",
+                                "description" to "Запрос для поиска статей"
+                            ),
+                            "summary_prompt" to mapOf(
+                                "type" to "string",
+                                "description" to "Промпт для суммаризации (опционально)"
+                            ),
+                            "filename" to mapOf(
+                                "type" to "string",
+                                "description" to "Имя файла для сохранения (опционально)"
+                            )
+                        ),
+                        "required" to listOf("search_query")
+                    )
+                ),
+                mapOf(
+                    "name" to "list_files",
+                    "description" to "Получить список сохранённых файлов",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
                 )
             )
         )
@@ -266,11 +340,16 @@ class McpServer(
     private fun handleToolCall(request: JsonObject): Map<String, Any> {
         val params = request.getAsJsonObject("params")
         val name = params?.get("name")?.asString ?: ""
+        val arguments = params?.getAsJsonObject("arguments")
         
         return when (name) {
             "sync_todoist" -> runBlocking { syncTodoist() }
             "list_tasks" -> runBlocking { listTasks() }
             "get_summary" -> runBlocking { getSummary() }
+            "search_web" -> runBlocking { searchWeb(arguments) }
+            "save_to_file" -> runBlocking { saveToFile(arguments) }
+            "run_pipeline" -> runBlocking { runPipeline(arguments) }
+            "list_files" -> runBlocking { listFiles() }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -349,6 +428,157 @@ class McpServer(
                 append("📝 Создано: ${summary.createdToday}\n")
                 append("⏳ Осталось: ${summary.pendingCount}")
             }
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+
+    /**
+     * Поиск в интернете
+     */
+    private suspend fun searchWeb(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val query = arguments?.get("query")?.asString ?: ""
+            val maxResults = arguments?.get("max_results")?.asInt ?: 3
+            
+            if (query.isBlank()) {
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Необходимо указать поисковый запрос")
+                    )
+                )
+            }
+            
+            val results = webSearchService.search(query, maxResults)
+            val text = webSearchService.formatResults(results)
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка поиска: ${e.message}")
+                )
+            )
+        }
+    }
+
+    /**
+     * Сохранение в файл
+     */
+    private suspend fun saveToFile(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val content = arguments?.get("content")?.asString ?: ""
+            val filename = arguments?.get("filename")?.asString
+            
+            if (content.isBlank()) {
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Содержимое файла не может быть пустым")
+                    )
+                )
+            }
+            
+            val result = fileStorageService.saveToFile(content, filename)
+            
+            val text = if (result.isSuccess) {
+                "✅ Файл успешно сохранён:\n${result.getOrNull()}"
+            } else {
+                "❌ Ошибка сохранения: ${result.exceptionOrNull()?.message}"
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+
+    /**
+     * Запуск автоматического пайплайна
+     */
+    private suspend fun runPipeline(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val searchQuery = arguments?.get("search_query")?.asString ?: ""
+            val summaryPrompt = arguments?.get("summary_prompt")?.asString 
+                ?: "Создай краткую выжимку из найденных статей"
+            val filename = arguments?.get("filename")?.asString
+            
+            if (searchQuery.isBlank()) {
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Необходимо указать поисковый запрос")
+                    )
+                )
+            }
+            
+            val result = pipelineAgent.runSearchSummarizeSavePipeline(
+                searchQuery = searchQuery,
+                summaryPrompt = summaryPrompt,
+                filename = filename
+            )
+            
+            // Возвращаем результат в JSON формате
+            val gson = com.google.gson.Gson()
+            val jsonResult = gson.toJson(result)
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to jsonResult)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка пайплайна: ${e.message}")
+                )
+            )
+        }
+    }
+
+    /**
+     * Список сохранённых файлов
+     */
+    private suspend fun listFiles(): Map<String, Any> {
+        return try {
+            val result = fileStorageService.listFiles()
+            
+            val text = if (result.isSuccess) {
+                val files = result.getOrNull() ?: emptyList()
+                if (files.isEmpty()) {
+                    "📁 Нет сохранённых файлов"
+                } else {
+                    buildString {
+                        append("📁 Сохранённые файлы (${files.size}):\n\n")
+                        files.forEachIndexed { index, filename ->
+                            append("${index + 1}. $filename\n")
+                        }
+                        append("\n📂 Директория: ${fileStorageService.getStorageDir()}")
+                    }
+                }
+            } else {
+                "❌ Ошибка: ${result.exceptionOrNull()?.message}"
+            }
+            
             mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to text)

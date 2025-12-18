@@ -994,6 +994,141 @@ private fun McpTabContent() {
             Text("Применить периодичность")
         }
         
+        HorizontalDivider(color = Color(0xFF333333))
+        
+        // 🤖 Автоматические пайплайны
+        Text(
+            text = "🤖 Автоматические пайплайны",
+            fontWeight = FontWeight.Bold,
+            fontSize = 16.sp,
+            color = Color.White
+        )
+        
+        Text(
+            text = "Автоматическая связка инструментов: поиск → суммаризация → сохранение",
+            fontSize = 12.sp,
+            color = Color.White.copy(alpha = 0.6f)
+        )
+        
+        // Примеры пайплайнов
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = Color(0xFF1A1A1A)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Быстрый запуск пайплайна:",
+                    fontWeight = FontWeight.Medium,
+                    fontSize = 13.sp,
+                    color = Color.White.copy(alpha = 0.8f)
+                )
+                
+                // Пример 1: Новости о AI
+                OutlinedButton(
+                    onClick = {
+                        // TODO: Запустить пайплайн через команду
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.White
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF333333))
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("📰", fontSize = 16.sp)
+                            Text(
+                                text = "Новости AI",
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        }
+                        Text(
+                            text = "Найти последние новости об искусственном интеллекте",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+                
+                // Пример 2: Технологии
+                OutlinedButton(
+                    onClick = {
+                        // TODO: Запустить пайплайн через команду
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(10.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.White
+                    ),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF333333))
+                ) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("💻", fontSize = 16.sp)
+                            Text(
+                                text = "Новые технологии",
+                                fontWeight = FontWeight.Medium,
+                                fontSize = 13.sp
+                            )
+                        }
+                        Text(
+                            text = "Поиск статей о новых технологиях программирования",
+                            fontSize = 11.sp,
+                            color = Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+                
+                HorizontalDivider(color = Color(0xFF333333))
+                
+                Text(
+                    text = "Или используйте команду в чате:",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.6f)
+                )
+                
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF0D0D0D)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "/pipeline [запрос]",
+                            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                            fontSize = 12.sp,
+                            color = AccentYellow
+                        )
+                        Text(
+                            text = "Пример: /pipeline найди статьи о квантовых компьютерах",
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+        }
+        
         // Результат
         mcpResult?.let { result ->
             when (result) {

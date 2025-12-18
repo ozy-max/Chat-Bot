@@ -6,6 +6,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -268,7 +270,70 @@ class TodoistService {
         val regex = """\[TODOIST-(\d+)\]""".toRegex()
         return regex.find(description)?.groupValues?.get(1)
     }
+    
+    /**
+     * Создание новой задачи в Todoist
+     */
+    suspend fun createTask(
+        title: String,
+        description: String? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        if (token.isBlank()) {
+            return@withContext Result.failure(Exception("Todoist токен не установлен"))
+        }
+        
+        try {
+            android.util.Log.i("TodoistService", "Создание задачи: $title")
+            android.util.Log.i("TodoistService", "Описание длина: ${description?.length ?: 0} символов")
+            
+            val url = "$BASE_URL_V2/tasks"
+            
+            // Используем Gson для правильной сериализации
+            val taskRequest = TodoistTaskRequest(
+                content = title,
+                description = description
+            )
+            
+            val requestBodyJson = gson.toJson(taskRequest)
+            android.util.Log.d("TodoistService", "Request JSON: $requestBodyJson")
+            
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val body = requestBodyJson.toRequestBody(mediaType)
+            
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $token")
+                .header("Content-Type", "application/json")
+                .post(body)
+                .build()
+            
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string() ?: ""
+                
+                if (!response.isSuccessful) {
+                    android.util.Log.e("TodoistService", "❌ Ошибка создания задачи: ${response.code}")
+                    android.util.Log.e("TodoistService", "Response: $responseBody")
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: $responseBody"))
+                }
+                
+                val task = gson.fromJson(responseBody, TodoistTask::class.java)
+                android.util.Log.i("TodoistService", "✅ Задача создана: ${task.id}")
+                
+                return@withContext Result.success(task.id)
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TodoistService", "❌ Исключение при создании задачи: ${e.message}", e)
+            return@withContext Result.failure(e)
+        }
+    }
 }
+
+private data class TodoistTaskRequest(
+    @SerializedName("content")
+    val content: String,
+    @SerializedName("description")
+    val description: String? = null
+)
 
 private data class TodoistTask(
     @SerializedName("id")

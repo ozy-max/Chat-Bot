@@ -440,6 +440,7 @@ class PeriodicSyncScheduler:
         self.thread = None
         self.last_sync_time = None
         self.known_task_ids = set()  # ID задач которые уже видели
+        self.interval_changed = False  # Флаг изменения интервала
         
     def start(self):
         """Запустить планировщик"""
@@ -455,6 +456,18 @@ class PeriodicSyncScheduler:
         self.running = False
         if self.thread:
             self.thread.join()
+    
+    def set_interval(self, minutes):
+        """Изменить интервал синхронизации"""
+        if minutes < 1:
+            print("⚠️  Минимальный интервал: 1 минута")
+            return False
+        
+        old_interval = self.interval_minutes
+        self.interval_minutes = minutes
+        self.interval_changed = True
+        print(f"✅ Интервал изменен: {old_interval} → {minutes} минут")
+        return True
     
     def _load_existing_tasks(self):
         """Загрузить ID существующих задач из БД"""
@@ -483,13 +496,19 @@ class PeriodicSyncScheduler:
             wait_seconds = self.interval_minutes * 60
             print(f"⏰ Следующая синхронизация через {self.interval_minutes} минут")
             
-            for _ in range(wait_seconds):
-                if not self.running:
+            # Ждем с проверкой изменения интервала
+            elapsed = 0
+            while elapsed < wait_seconds and self.running:
+                if self.interval_changed:
+                    # Интервал изменился - перезапускаем ожидание
+                    self.interval_changed = False
+                    print(f"🔄 Перезапуск таймера с новым интервалом: {self.interval_minutes} минут")
                     break
                 time.sleep(1)
+                elapsed += 1
             
-            # Проверяем новые задачи
-            if self.running:
+            # Если интервал не был изменен и таймер истек - проверяем задачи
+            if not self.interval_changed and elapsed >= wait_seconds and self.running:
                 self._check_for_new_tasks()
     
     def _check_for_new_tasks(self):
@@ -786,6 +805,59 @@ def handle_tool_call(name, args):
 
 class MCPHandler(BaseHTTPRequestHandler):
     def do_POST(self):
+        # Обработка /set_interval
+        if self.path == "/set_interval":
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            
+            try:
+                data = json.loads(body)
+                interval_minutes = data.get("interval_minutes", 30)
+                
+                # Используем глобальную переменную sync_scheduler
+                global sync_scheduler
+                if sync_scheduler and sync_scheduler.set_interval(interval_minutes):
+                    response = {"status": "success", "interval_minutes": interval_minutes}
+                    self.send_response(200)
+                else:
+                    response = {"status": "error", "message": "Invalid interval"}
+                    self.send_response(400)
+                
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_error(500, str(e))
+                return
+        
+        # Обработка /set_todoist_token
+        if self.path == "/set_todoist_token":
+            content_length = int(self.headers.get('Content-Length', 0))
+            body = self.rfile.read(content_length).decode('utf-8')
+            
+            try:
+                data = json.loads(body)
+                token = data.get("token", "")
+                
+                # Обновляем глобальную переменную TODOIST_API_TOKEN
+                global TODOIST_API_TOKEN
+                TODOIST_API_TOKEN = token
+                
+                print(f"✅ Todoist токен обновлён: {token[:10]}...")
+                
+                response = {"status": "success"}
+                self.send_response(200)
+                
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(response).encode('utf-8'))
+                return
+            except Exception as e:
+                self.send_error(500, str(e))
+                return
+        
+        # Обработка /mcp
         if self.path != "/mcp":
             self.send_error(404)
             return
@@ -882,6 +954,9 @@ def get_local_ip():
 # ============================================
 # MAIN
 # ============================================
+
+# Глобальная переменная для планировщика синхронизации
+sync_scheduler = None
 
 if __name__ == "__main__":
     PORT = 3000

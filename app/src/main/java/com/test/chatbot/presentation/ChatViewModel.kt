@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 
 class ChatViewModel(
     private val repository: ChatRepository = ChatRepository(),
@@ -191,6 +193,7 @@ class ChatViewModel(
                             apiKey = settings.claudeApiKey,
                             yandexApiKey = settings.yandexApiKey,
                             yandexFolderId = settings.yandexFolderId,
+                            todoistToken = settings.todoistToken,
                             temperature = settings.temperature,
                             maxTokens = settings.maxTokens,
                             selectedProvider = provider,
@@ -198,6 +201,16 @@ class ChatViewModel(
                             showApiKeyDialog = settings.claudeApiKey.isBlank() && settings.yandexApiKey.isBlank(),
                             isSettingsLoaded = true
                         )
+                    }
+                    
+                    // Устанавливаем Todoist токен во встроенный сервер
+                    if (settings.todoistToken.isNotBlank()) {
+                        try {
+                            com.test.chatbot.ChatBotApplication.mcpServer.setTodoistToken(settings.todoistToken)
+                            Log.e("ChatViewModel", "✅ Todoist token loaded into embedded server")
+                        } catch (e: Exception) {
+                            Log.e("ChatViewModel", "❌ Failed to load Todoist token: ${e.message}")
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e("ChatViewModel", "Error loading settings: ${e.message}")
@@ -215,6 +228,7 @@ class ChatViewModel(
             is ChatUiEvents.UpdateApiKey -> updateApiKey(event.apiKey)
             is ChatUiEvents.UpdateYandexApiKey -> updateYandexApiKey(event.apiKey)
             is ChatUiEvents.UpdateYandexFolderId -> updateYandexFolderId(event.folderId)
+            is ChatUiEvents.UpdateTodoistToken -> updateTodoistToken(event.token)
             is ChatUiEvents.UpdateTemperature -> updateTemperature(event.temperature)
             is ChatUiEvents.UpdateMaxTokens -> updateMaxTokens(event.maxTokens)
             is ChatUiEvents.UpdateProvider -> updateProvider(event.provider)
@@ -593,6 +607,25 @@ class ChatViewModel(
         // Сохраняем в DataStore
         viewModelScope.launch {
             preferencesRepository?.saveYandexFolderId(folderId)
+        }
+    }
+    
+    private fun updateTodoistToken(token: String) {
+        _uiState.update { it.copy(todoistToken = token) }
+        // Сохраняем в DataStore
+        viewModelScope.launch {
+            preferencesRepository?.saveTodoistToken(token)
+            
+            // Отправляем токен на встроенный MCP сервер
+            if (token.isNotBlank()) {
+                try {
+                    // Используем встроенный сервер напрямую
+                    com.test.chatbot.ChatBotApplication.mcpServer.setTodoistToken(token)
+                    Log.e("ChatViewModel", "✅ Todoist token set in embedded server")
+                } catch (e: Exception) {
+                    Log.e("ChatViewModel", "❌ Failed to set Todoist token: ${e.message}")
+                }
+            }
         }
     }
     
@@ -1104,6 +1137,9 @@ class ChatViewModel(
             }
             
             "list" -> {
+                // Автоматическая синхронизация перед получением списка
+                mcpClient?.callTool("sync_todoist", emptyMap())
+                
                 val status = if (args.isNotBlank()) args else null
                 val params = if (status != null) mapOf("status" to status) else emptyMap()
                 
@@ -1151,6 +1187,9 @@ class ChatViewModel(
     }
     
     private suspend fun handleSummaryCommand() {
+        // Автоматическая синхронизация перед получением summary
+        mcpClient?.callTool("sync_todoist", emptyMap())
+        
         val result = mcpClient?.callTool("get_summary", emptyMap())
         
         result?.onSuccess { toolResult ->

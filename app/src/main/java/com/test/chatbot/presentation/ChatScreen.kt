@@ -88,11 +88,13 @@ fun ChatScreen(
             currentApiKey = uiState.apiKey,
             currentYandexApiKey = uiState.yandexApiKey,
             currentYandexFolderId = uiState.yandexFolderId,
+            currentTodoistToken = uiState.todoistToken,
             selectedProvider = uiState.selectedProvider,
-            onSave = { claudeKey, yandexKey, yandexFolderId ->
+            onSave = { claudeKey, yandexKey, yandexFolderId, todoistToken ->
                 onUiEvent(ChatUiEvents.UpdateApiKey(claudeKey))
                 onUiEvent(ChatUiEvents.UpdateYandexApiKey(yandexKey))
                 onUiEvent(ChatUiEvents.UpdateYandexFolderId(yandexFolderId))
+                onUiEvent(ChatUiEvents.UpdateTodoistToken(todoistToken))
                 onUiEvent(ChatUiEvents.DismissApiKeyDialog)
             },
             onDismiss = { onUiEvent(ChatUiEvents.DismissApiKeyDialog) }

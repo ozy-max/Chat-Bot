@@ -31,6 +31,9 @@ import com.test.chatbot.models.CompressionSettings
 import com.test.chatbot.models.CompressionState
 import com.test.chatbot.models.TokenStats
 import com.test.chatbot.ui.theme.AccentYellow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -816,7 +819,9 @@ private fun McpTabContent() {
     var isLoading by remember { mutableStateOf(false) }
     var mcpResult by remember { mutableStateOf<McpConnectionResult?>(null) }
     var serverUrl by remember { mutableStateOf("") }
+    var intervalMinutes by remember { mutableStateOf("1") }
     
+    val scope = rememberCoroutineScope()
     val scrollState = androidx.compose.foundation.rememberScrollState()
     
     Column(
@@ -895,6 +900,100 @@ private fun McpTabContent() {
             Text("Подключить")
         }
         
+        // Поле ввода периодичности summary
+        OutlinedTextField(
+            value = intervalMinutes,
+            onValueChange = { 
+                // Разрешаем только цифры
+                if (it.isEmpty() || it.all { char -> char.isDigit() }) {
+                    intervalMinutes = it
+                }
+            },
+            label = { Text("Периодичность summary (минуты)") },
+            placeholder = { Text("1") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            supportingText = {
+                Text(
+                    text = "Укажите через сколько минут получать уведомления (минимум 1)",
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f)
+                )
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AccentYellow,
+                unfocusedBorderColor = Color(0xFF333333),
+                focusedLabelColor = AccentYellow,
+                unfocusedLabelColor = Color.White.copy(alpha = 0.5f),
+                cursorColor = AccentYellow
+            )
+        )
+        
+        // Кнопка применения интервала
+        Button(
+            onClick = {
+                val minutes = intervalMinutes.toIntOrNull() ?: 1
+                if (minutes >= 1) {
+                    isLoading = true
+                    scope.launch {
+                        try {
+                            // Используем фиксированный URL для embedded сервера
+                            val url = "http://localhost:3000/set_interval"
+                            val result = withContext(Dispatchers.IO) {
+                                val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+                                try {
+                                    connection.requestMethod = "POST"
+                                    connection.doOutput = true
+                                    connection.setRequestProperty("Content-Type", "application/json")
+                                    connection.connectTimeout = 5000
+                                    connection.readTimeout = 5000
+                                    
+                                    val json = """{"interval_minutes": $minutes}"""
+                                    connection.outputStream.use { it.write(json.toByteArray()) }
+                                    
+                                    val responseCode = connection.responseCode
+                                    connection.disconnect()
+                                    responseCode
+                                } catch (e: Exception) {
+                                    connection.disconnect()
+                                    throw e
+                                }
+                            }
+                            
+                            isLoading = false
+                            if (result == 200) {
+                                mcpResult = McpConnectionResult.Success(
+                                    serverName = "MCP Server",
+                                    serverVersion = "1.0",
+                                    tools = emptyList()
+                                )
+                            } else {
+                                mcpResult = McpConnectionResult.Error("Ошибка: код $result")
+                            }
+                        } catch (e: Exception) {
+                            isLoading = false
+                            mcpResult = McpConnectionResult.Error("Ошибка: ${e.message}")
+                        }
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading && intervalMinutes.isNotBlank(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = Color(0xFF4CAF50).copy(alpha = 0.15f),
+                contentColor = Color(0xFF4CAF50)
+            ),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Notifications,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Применить периодичность")
+        }
+        
         // Результат
         mcpResult?.let { result ->
             when (result) {
@@ -933,32 +1032,6 @@ private fun McpTabContent() {
                                     color = Color.White.copy(alpha = 0.6f)
                                 )
                             }
-                            
-                            HorizontalDivider(color = Color(0xFF333333))
-                            
-                            Text(
-                                text = "📦 Доступные инструменты (${result.tools.size}):",
-                                fontWeight = FontWeight.Medium,
-                                fontSize = 14.sp,
-                                color = AccentYellow
-                            )
-                            
-                            // Список инструментов
-                            if (result.tools.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                result.tools.forEach { tool ->
-                                    McpToolItem(tool)
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                }
-                            } else {
-                                Text(
-                                    text = "Нет инструментов",
-                                    fontSize = 12.sp,
-                                    color = Color.White.copy(alpha = 0.5f),
-                                    modifier = Modifier.padding(vertical = 16.dp)
-                                )
-                            }
                         }
                     }
                 }
@@ -990,69 +1063,6 @@ private fun McpTabContent() {
                 }
             }
         }
-        
-        // Секция команд
-        HorizontalDivider(color = Color(0xFF333333))
-        
-        Text(
-            text = "💡 Доступные команды",
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp,
-            color = AccentYellow
-        )
-        
-        // Команды погоды
-        CommandCard(
-            title = "🌤️ Погода",
-            command = "/weather <город>",
-            description = "Получить текущую погоду",
-            example = "/weather Москва"
-        )
-        
-        // Команды задач
-        CommandCard(
-            title = "📝 Добавить задачу",
-            command = "/task add <название>",
-            description = "Создать новую задачу",
-            example = "/task add Купить продукты"
-        )
-        
-        CommandCard(
-            title = "📋 Список задач",
-            command = "/task list [pending/completed]",
-            description = "Показать все задачи",
-            example = "/task list"
-        )
-        
-        CommandCard(
-            title = "✅ Завершить задачу",
-            command = "/task complete <id>",
-            description = "Отметить задачу выполненной",
-            example = "/task complete 1"
-        )
-        
-        CommandCard(
-            title = "📊 Сводка задач",
-            command = "/summary",
-            description = "Статистика задач за сегодня",
-            example = "/summary"
-        )
-        
-        CommandCard(
-            title = "🔄 Синхронизация с Трекером",
-            command = "/sync",
-            description = "Импортировать задачи из Яндекс.Трекера",
-            example = "/sync"
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        Text(
-            text = "💡 Совет: Агент автоматически синхронизирует задачи и отправляет сводку в 18:00",
-            fontSize = 11.sp,
-            color = Color.White.copy(alpha = 0.5f),
-            modifier = Modifier.padding(horizontal = 8.dp)
-        )
     }
 }
 
@@ -1095,81 +1105,6 @@ private fun McpToolItem(tool: McpTool) {
                         text = "Параметры: ${props.keys.joinToString(", ")}",
                         fontSize = 10.sp,
                         color = AccentYellow.copy(alpha = 0.7f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun CommandCard(
-    title: String,
-    command: String,
-    description: String,
-    example: String
-) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(8.dp),
-        color = Color(0xFF1A1A1A),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF333333))
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = title,
-                fontWeight = FontWeight.Medium,
-                fontSize = 13.sp,
-                color = Color.White
-            )
-            
-            Text(
-                text = description,
-                fontSize = 11.sp,
-                color = Color.White.copy(alpha = 0.6f)
-            )
-            
-            Surface(
-                shape = RoundedCornerShape(6.dp),
-                color = Color(0xFF2A2A2A)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Синтаксис:",
-                        fontSize = 9.sp,
-                        color = Color.White.copy(alpha = 0.4f)
-                    )
-                    Text(
-                        text = command,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = AccentYellow,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
-                    )
-                    
-                    androidx.compose.material3.HorizontalDivider(
-                        color = Color(0xFF333333),
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                    
-                    Text(
-                        text = "Пример:",
-                        fontSize = 9.sp,
-                        color = Color.White.copy(alpha = 0.4f)
-                    )
-                    Text(
-                        text = example,
-                        fontSize = 11.sp,
-                        color = Color.White.copy(alpha = 0.8f),
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
                     )
                 }
             }

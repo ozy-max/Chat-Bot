@@ -28,14 +28,16 @@ fun ApiKeyDialog(
     currentApiKey: String,
     currentYandexApiKey: String = "",
     currentYandexFolderId: String = "",
+    currentTodoistToken: String = "",
     selectedProvider: AiProvider = AiProvider.CLAUDE,
-    onSave: (claudeKey: String, yandexKey: String, yandexFolderId: String) -> Unit,
+    onSave: (claudeKey: String, yandexKey: String, yandexFolderId: String, todoistToken: String) -> Unit,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var claudeApiKey by remember { mutableStateOf(currentApiKey) }
     var yandexApiKey by remember { mutableStateOf(currentYandexApiKey) }
     var yandexFolderId by remember { mutableStateOf(currentYandexFolderId) }
+    var todoistToken by remember { mutableStateOf(currentTodoistToken) }
     
     Dialog(
         onDismissRequest = onDismiss,
@@ -164,6 +166,24 @@ fun ApiKeyDialog(
                     label = "Folder ID"
                 )
                 
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                // Todoist секция
+                SectionHeader(
+                    icon = "✅",
+                    title = "Todoist",
+                    color = Color(0xFFE44332)
+                )
+                
+                Spacer(modifier = Modifier.height(10.dp))
+                
+                ModernTextField(
+                    value = todoistToken,
+                    onValueChange = { todoistToken = it },
+                    placeholder = "55ba907df1b33fd...",
+                    label = "API Token"
+                )
+                
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 // Кнопки
@@ -188,7 +208,7 @@ fun ApiKeyDialog(
                     
                     // Сохранить
                     Button(
-                        onClick = { onSave(claudeApiKey, yandexApiKey, yandexFolderId) },
+                        onClick = { onSave(claudeApiKey, yandexApiKey, yandexFolderId, todoistToken) },
                         modifier = Modifier
                             .weight(1f)
                             .height(48.dp),

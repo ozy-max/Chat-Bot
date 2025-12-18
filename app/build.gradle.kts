@@ -47,6 +47,12 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.material)
     
+    // NanoHTTPD для встроенного HTTP сервера
+    implementation("org.nanohttpd:nanohttpd:2.3.1")
+    
+    // OkHttp для Todoist API
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    
     // Compose
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.compose.ui)

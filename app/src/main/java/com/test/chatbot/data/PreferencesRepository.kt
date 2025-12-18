@@ -26,6 +26,7 @@ class PreferencesRepository(private val context: Context) {
         private val CLAUDE_API_KEY = stringPreferencesKey("claude_api_key")
         private val YANDEX_API_KEY = stringPreferencesKey("yandex_api_key")
         private val YANDEX_FOLDER_ID = stringPreferencesKey("yandex_folder_id")
+        private val TODOIST_TOKEN = stringPreferencesKey("todoist_token")
         private val TEMPERATURE = doublePreferencesKey("temperature")
         private val SELECTED_PROVIDER = stringPreferencesKey("selected_provider")
         private val MAX_TOKENS = intPreferencesKey("max_tokens")
@@ -41,6 +42,7 @@ class PreferencesRepository(private val context: Context) {
         val claudeApiKey: String = "",
         val yandexApiKey: String = "",
         val yandexFolderId: String = "",
+        val todoistToken: String = "",
         val temperature: Double = 0.7,
         val selectedProvider: String = "CLAUDE",
         val maxTokens: Int = 4096
@@ -54,6 +56,7 @@ class PreferencesRepository(private val context: Context) {
             claudeApiKey = preferences[CLAUDE_API_KEY] ?: "",
             yandexApiKey = preferences[YANDEX_API_KEY] ?: "",
             yandexFolderId = preferences[YANDEX_FOLDER_ID] ?: "",
+            todoistToken = preferences[TODOIST_TOKEN] ?: "",
             temperature = preferences[TEMPERATURE] ?: 0.7,
             selectedProvider = preferences[SELECTED_PROVIDER] ?: "CLAUDE",
             maxTokens = preferences[MAX_TOKENS] ?: 4096
@@ -84,6 +87,15 @@ class PreferencesRepository(private val context: Context) {
     suspend fun saveYandexFolderId(folderId: String) {
         context.dataStore.edit { preferences ->
             preferences[YANDEX_FOLDER_ID] = folderId
+        }
+    }
+    
+    /**
+     * Сохранить Todoist API Token
+     */
+    suspend fun saveTodoistToken(token: String) {
+        context.dataStore.edit { preferences ->
+            preferences[TODOIST_TOKEN] = token
         }
     }
     

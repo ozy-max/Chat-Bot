@@ -16,6 +16,7 @@ data class ChatUiState(
     val apiKey: String = "",
     val yandexApiKey: String = "",
     val yandexFolderId: String = "",
+    val todoistToken: String = "",
     val temperature: Double = 0.7,
     val maxTokens: Int = 4096, // Максимальное количество токенов для ответа
     val showSettingsDialog: Boolean = false,
@@ -46,5 +47,6 @@ data class ChatUiState(
     val showAiFeaturesSheet: Boolean = false,
     
     // MCP
-    val mcpServerUrl: String = "http://10.0.2.2:3000/mcp" // URL по умолчанию для эмулятора
+    val mcpServerUrl: String = "http://localhost:3000/mcp", // Встроенный сервер
+    val summaryIntervalMinutes: Int = 30 // Периодичность уведомлений в минутах (по умолчанию 30 минут)
 )

@@ -24,6 +24,7 @@ data class PipelineResult(
 class PipelineAgent(
     context: Context,
     private val todoistService: TodoistService,
+    private val chatRepository: com.test.chatbot.repository.ChatRepository,
     private val onStepComplete: ((PipelineStep) -> Unit)? = null
 ) {
     
@@ -37,7 +38,8 @@ class PipelineAgent(
     suspend fun runSearchSummarizeSavePipeline(
         searchQuery: String,
         summaryPrompt: String = "Создай краткую выжимку из найденных статей",
-        filename: String? = null
+        filename: String? = null,
+        apiKey: String = ""
     ): PipelineResult {
         val steps = mutableListOf<PipelineStep>()
         
@@ -52,7 +54,7 @@ class PipelineAgent(
             onStepComplete?.invoke(steps.last())
             delay(500)
             
-            val rawSearchResults = webSearchService.search(searchQuery, maxResults = 3)
+            val rawSearchResults = webSearchService.search(searchQuery, maxResults = 5)
             
             // Декодируем URL из DuckDuckGo редиректов
             val searchResults = rawSearchResults.map { result ->
@@ -104,7 +106,8 @@ class PipelineAgent(
             onStepComplete?.invoke(steps.last())
             delay(500)
             
-            val summaryText = createSummary(searchResults, summaryPrompt)
+            // Создаём реальную суммаризацию через AI
+            val summaryText = createAISummary(searchResults, summaryPrompt, apiKey)
             
             val summaryStep = steps.last().copy(
                 status = "completed",
@@ -303,19 +306,92 @@ class PipelineAgent(
         }
     }
     
-    private fun createSummary(results: List<SearchResult>, prompt: String): String {
-        return buildString {
-            append("$prompt\n\n")
+    private suspend fun createAISummary(results: List<SearchResult>, prompt: String, apiKey: String): String {
+        if (apiKey.isBlank()) {
+            Log.w(TAG, "API ключ не предоставлен, создаём простую суммаризацию")
+            return createSimpleSummary(results, prompt)
+        }
+        
+        try {
+            // Формируем промпт с содержимым статей
+            val articlesContent = results.joinToString("\n\n---\n\n") { result ->
+                "**${result.title}**\n\n${result.snippet}"
+            }
             
+            val fullPrompt = """
+                На основе следующей информации из найденных статей, создай связную выжимку на русском языке:
+                
+                $articlesContent
+                
+                ---
+                
+                Твоя задача:
+                • Проанализируй и объедини информацию из всех фрагментов
+                • Создай структурированный текст из 3-5 абзацев
+                • Выдели ключевые моменты и важные детали
+                • Пиши простым и понятным языком
+                • НЕ упоминай "статьи", "источники" или "тексты" - пиши как единое изложение
+                • НЕ добавляй вступлений вроде "Выжимка:", "На основе статей" и т.п.
+                
+                Начинай прямо с содержания!
+            """.trimIndent()
+            
+            Log.d(TAG, "Отправляем промпт в Claude API (${fullPrompt.length} символов)")
+            Log.d(TAG, "Количество статей для суммаризации: ${results.size}")
+            
+            // Вызываем Claude API напрямую
+            val messages = listOf(
+                com.test.chatbot.models.ClaudeMessage(role = "user", content = fullPrompt)
+            )
+            
+            val result = chatRepository.sendMessageToClaude(
+                apiKey = apiKey,
+                conversationHistory = messages,
+                temperature = 0.7,
+                maxTokens = 2048,
+                memoryContext = ""
+            )
+            
+            return if (result.isSuccess) {
+                val response = result.getOrNull()
+                val summaryText = response?.text ?: ""
+                
+                // Проверяем что получили реальную выжимку, а не техническое описание
+                val isTechnicalResponse = summaryText.contains("не могу извлечь", ignoreCase = true) ||
+                        summaryText.contains("представленных сообщений", ignoreCase = true) ||
+                        summaryText.contains("техническую инструкцию", ignoreCase = true) ||
+                        summaryText.contains("список найденных статей", ignoreCase = true) ||
+                        summaryText.contains("команду для обработки", ignoreCase = true) ||
+                        summaryText.contains("рабочий запрос", ignoreCase = true)
+                
+                if (summaryText.isNotBlank() && !isTechnicalResponse && summaryText.length >= 100) {
+                    Log.i(TAG, "✅ AI суммаризация создана (${summaryText.length} символов)")
+                    summaryText.trim()
+                } else {
+                    if (isTechnicalResponse) {
+                        Log.w(TAG, "⚠️ Claude вернул техническое описание вместо выжимки")
+                    } else {
+                        Log.w(TAG, "⚠️ AI вернул слишком короткий ответ: ${summaryText.length} символов")
+                    }
+                    createSimpleSummary(results, prompt)
+                }
+            } else {
+                Log.w(TAG, "Ошибка AI суммаризации: ${result.exceptionOrNull()?.message}")
+                createSimpleSummary(results, prompt)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Исключение при AI суммаризации: ${e.message}", e)
+            return createSimpleSummary(results, prompt)
+        }
+    }
+    
+    private fun createSimpleSummary(results: List<SearchResult>, prompt: String): String {
+        return buildString {
             append("📊 Анализ ${results.size} статей:\n\n")
             
             results.forEach { result ->
+                append("• ${result.title}\n")
                 append("${result.snippet}\n\n")
-            }
-            
-            append("🔗 Источники:\n")
-            results.forEachIndexed { index, result ->
-                append("${index + 1}. ${result.url}\n")
             }
         }
     }

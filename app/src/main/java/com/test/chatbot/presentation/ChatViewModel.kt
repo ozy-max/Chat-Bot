@@ -1245,7 +1245,8 @@ class ChatViewModel(
     private suspend fun handlePipelineCommand(searchQuery: String) {
         val result = mcpClient?.callTool("run_pipeline", mapOf(
             "search_query" to searchQuery,
-            "summary_prompt" to "Создай краткую выжимку из найденных статей"
+            "summary_prompt" to "Создай краткую выжимку из найденных статей",
+            "api_key" to _uiState.value.apiKey  // Передаём API ключ для AI суммаризации
         ))
         
         result?.onSuccess { toolResult ->

@@ -50,7 +50,8 @@ class McpServer(
             
             webSearchService = WebSearchService()
             fileStorageService = FileStorageService(context)
-            pipelineAgent = PipelineAgent(context, todoistService)
+            val chatRepository = com.test.chatbot.repository.ChatRepository()
+            pipelineAgent = PipelineAgent(context, todoistService, chatRepository)
             
             Log.i(TAG, "✅ MCP Server инициализирован на порту $port")
         } catch (e: Exception) {
@@ -522,6 +523,7 @@ class McpServer(
             val summaryPrompt = arguments?.get("summary_prompt")?.asString 
                 ?: "Создай краткую выжимку из найденных статей"
             val filename = arguments?.get("filename")?.asString
+            val apiKey = arguments?.get("api_key")?.asString ?: ""
             
             if (searchQuery.isBlank()) {
                 return mapOf(
@@ -534,7 +536,8 @@ class McpServer(
             val result = pipelineAgent.runSearchSummarizeSavePipeline(
                 searchQuery = searchQuery,
                 summaryPrompt = summaryPrompt,
-                filename = filename
+                filename = filename,
+                apiKey = apiKey
             )
             
             // Возвращаем результат в JSON формате

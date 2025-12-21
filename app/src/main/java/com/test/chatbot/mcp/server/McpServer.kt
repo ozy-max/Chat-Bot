@@ -8,6 +8,13 @@ import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.*
 import java.io.IOException
 
+// Import new services
+import com.test.chatbot.mcp.server.SystemMonitorService
+import com.test.chatbot.mcp.server.FileManagerService
+import com.test.chatbot.mcp.server.ScriptAutomationService
+import com.test.chatbot.mcp.server.TermuxService
+import com.test.chatbot.mcp.server.AdbWifiService
+
 /**
  * Встроенный MCP (Model Context Protocol) сервер на Kotlin
  * Работает внутри Android приложения
@@ -30,6 +37,13 @@ class McpServer(
     private lateinit var fileStorageService: FileStorageService
     private lateinit var pipelineAgent: PipelineAgent
     private lateinit var adbService: AdbService
+    
+    // Advanced services
+    private lateinit var systemMonitorService: SystemMonitorService
+    private lateinit var fileManagerService: FileManagerService
+    private lateinit var scriptAutomationService: ScriptAutomationService
+    private lateinit var termuxService: TermuxService
+    private lateinit var adbWifiService: AdbWifiService
 
     companion object {
         private const val TAG = "McpServer"
@@ -52,6 +66,14 @@ class McpServer(
             webSearchService = WebSearchService()
             fileStorageService = FileStorageService(context)
             adbService = AdbService(context)
+            
+            // Advanced services
+            systemMonitorService = SystemMonitorService(context)
+            fileManagerService = FileManagerService(context)
+            scriptAutomationService = ScriptAutomationService(context)
+            termuxService = TermuxService(context)
+            adbWifiService = AdbWifiService(context)
+            
             val chatRepository = com.test.chatbot.repository.ChatRepository()
             pipelineAgent = PipelineAgent(context, todoistService, chatRepository)
             
@@ -411,6 +433,221 @@ class McpServer(
                         ),
                         "required" to emptyList<String>()
                     )
+                ),
+                // System Monitor Tools
+                mapOf(
+                    "name" to "system_info",
+                    "description" to "Получить полную информацию о системе (батарея, память, CPU, сеть, хранилище)",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "battery_info",
+                    "description" to "Получить информацию о батарее",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "memory_info",
+                    "description" to "Получить информацию о памяти",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "cpu_info",
+                    "description" to "Получить информацию о процессоре",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "network_info",
+                    "description" to "Получить информацию о сетевом подключении",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "storage_info",
+                    "description" to "Получить информацию о хранилище",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                // File Manager Tools
+                mapOf(
+                    "name" to "fm_list",
+                    "description" to "Получить список файлов и директорий",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "path" to mapOf(
+                                "type" to "string",
+                                "description" to "Путь к директории (относительно app_files)"
+                            )
+                        ),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "fm_read",
+                    "description" to "Прочитать содержимое файла",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "path" to mapOf(
+                                "type" to "string",
+                                "description" to "Путь к файлу"
+                            )
+                        ),
+                        "required" to listOf("path")
+                    )
+                ),
+                mapOf(
+                    "name" to "fm_write",
+                    "description" to "Записать содержимое в файл",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "path" to mapOf(
+                                "type" to "string",
+                                "description" to "Путь к файлу"
+                            ),
+                            "content" to mapOf(
+                                "type" to "string",
+                                "description" to "Содержимое файла"
+                            )
+                        ),
+                        "required" to listOf("path", "content")
+                    )
+                ),
+                mapOf(
+                    "name" to "fm_delete",
+                    "description" to "Удалить файл или директорию",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "path" to mapOf(
+                                "type" to "string",
+                                "description" to "Путь к файлу или директории"
+                            )
+                        ),
+                        "required" to listOf("path")
+                    )
+                ),
+                mapOf(
+                    "name" to "fm_search",
+                    "description" to "Найти файлы по имени",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "pattern" to mapOf(
+                                "type" to "string",
+                                "description" to "Шаблон для поиска"
+                            ),
+                            "search_path" to mapOf(
+                                "type" to "string",
+                                "description" to "Путь для поиска (опционально)"
+                            )
+                        ),
+                        "required" to listOf("pattern")
+                    )
+                ),
+                // Script Automation Tools
+                mapOf(
+                    "name" to "script_list",
+                    "description" to "Получить список сохранённых скриптов",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "script_info",
+                    "description" to "Получить информацию о скрипте",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "script_id" to mapOf(
+                                "type" to "string",
+                                "description" to "ID скрипта"
+                            )
+                        ),
+                        "required" to listOf("script_id")
+                    )
+                ),
+                mapOf(
+                    "name" to "script_execute",
+                    "description" to "Выполнить скрипт",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "script_id" to mapOf(
+                                "type" to "string",
+                                "description" to "ID скрипта для выполнения"
+                            )
+                        ),
+                        "required" to listOf("script_id")
+                    )
+                ),
+                // Termux Tools
+                mapOf(
+                    "name" to "termux_info",
+                    "description" to "Получить информацию о Termux",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "termux_command",
+                    "description" to "Выполнить команду в Termux",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "command" to mapOf(
+                                "type" to "string",
+                                "description" to "Команда для выполнения"
+                            )
+                        ),
+                        "required" to listOf("command")
+                    )
+                ),
+                // ADB WiFi Tools
+                mapOf(
+                    "name" to "adb_wifi_info",
+                    "description" to "Получить информацию о ADB over WiFi",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "ssh_info",
+                    "description" to "Получить информацию о SSH доступе через Termux",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
                 )
             )
         )
@@ -439,6 +676,29 @@ class McpServer(
             "start_app" -> runBlocking { startApp(arguments) }
             "shell_command" -> runBlocking { executeShellCommand(arguments) }
             "list_apps" -> runBlocking { listInstalledApps(arguments) }
+            // System Monitor Tools
+            "system_info" -> runBlocking { getSystemInfo() }
+            "battery_info" -> runBlocking { getBatteryInfo() }
+            "memory_info" -> runBlocking { getMemoryInfo() }
+            "cpu_info" -> runBlocking { getCpuInfo() }
+            "network_info" -> runBlocking { getNetworkInfo() }
+            "storage_info" -> runBlocking { getStorageInfo() }
+            // File Manager Tools
+            "fm_list" -> runBlocking { fileManagerList(arguments) }
+            "fm_read" -> runBlocking { fileManagerRead(arguments) }
+            "fm_write" -> runBlocking { fileManagerWrite(arguments) }
+            "fm_delete" -> runBlocking { fileManagerDelete(arguments) }
+            "fm_search" -> runBlocking { fileManagerSearch(arguments) }
+            // Script Automation Tools
+            "script_list" -> runBlocking { scriptList() }
+            "script_info" -> runBlocking { scriptInfo(arguments) }
+            "script_execute" -> runBlocking { scriptExecute(arguments) }
+            // Termux Tools
+            "termux_info" -> runBlocking { termuxInfo() }
+            "termux_command" -> runBlocking { termuxCommand(arguments) }
+            // ADB WiFi Tools
+            "adb_wifi_info" -> runBlocking { adbWifiInfo() }
+            "ssh_info" -> runBlocking { sshInfo() }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -883,6 +1143,291 @@ class McpServer(
                 )
             )
         }
+    }
+    
+    // ==================== System Monitor Tools ====================
+    
+    private suspend fun getSystemInfo(): Map<String, Any> {
+        return try {
+            val result = systemMonitorService.getSystemInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun getBatteryInfo(): Map<String, Any> {
+        return try {
+            val result = systemMonitorService.getBatteryInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun getMemoryInfo(): Map<String, Any> {
+        return try {
+            val result = systemMonitorService.getMemoryInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun getCpuInfo(): Map<String, Any> {
+        return try {
+            val result = systemMonitorService.getCpuInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun getNetworkInfo(): Map<String, Any> {
+        return try {
+            val result = systemMonitorService.getNetworkInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun getStorageInfo(): Map<String, Any> {
+        return try {
+            val result = systemMonitorService.getStorageInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    // ==================== File Manager Tools ====================
+    
+    private suspend fun fileManagerList(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val path = arguments?.get("path")?.asString ?: ""
+            val result = fileManagerService.listDirectory(path)
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun fileManagerRead(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val path = arguments?.get("path")?.asString
+            
+            if (path.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать путь к файлу")
+            }
+            
+            val result = fileManagerService.readFile(path)
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun fileManagerWrite(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val path = arguments?.get("path")?.asString
+            val content = arguments?.get("content")?.asString
+            
+            if (path.isNullOrBlank() || content == null) {
+                return createErrorMessage("Необходимо указать путь и содержимое файла")
+            }
+            
+            val result = fileManagerService.writeFile(path, content)
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun fileManagerDelete(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val path = arguments?.get("path")?.asString
+            
+            if (path.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать путь к файлу")
+            }
+            
+            val result = fileManagerService.deleteFile(path)
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun fileManagerSearch(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val pattern = arguments?.get("pattern")?.asString
+            val searchPath = arguments?.get("search_path")?.asString ?: ""
+            
+            if (pattern.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать шаблон для поиска")
+            }
+            
+            val result = fileManagerService.searchFiles(pattern, searchPath)
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    // ==================== Script Automation Tools ====================
+    
+    private suspend fun scriptList(): Map<String, Any> {
+        return try {
+            val result = scriptAutomationService.listScripts()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun scriptInfo(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val scriptId = arguments?.get("script_id")?.asString
+            
+            if (scriptId.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать ID скрипта")
+            }
+            
+            val result = scriptAutomationService.getScriptInfo(scriptId)
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun scriptExecute(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val scriptId = arguments?.get("script_id")?.asString
+            
+            if (scriptId.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать ID скрипта")
+            }
+            
+            // TODO: Передать MCP клиент для выполнения скриптов с MCP инструментами
+            val result = scriptAutomationService.executeScript(scriptId, null)
+            
+            result.fold(
+                onSuccess = { executionResult ->
+                    val message = buildString {
+                        append("📜 Выполнение скрипта: ${executionResult.scriptId}\n")
+                        append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                        
+                        executionResult.steps.forEachIndexed { index, step ->
+                            val status = if (step.success) "✅" else "❌"
+                            append("${index + 1}. $status ${step.command.action}\n")
+                            if (step.output != null) {
+                                append("   ${step.output}\n")
+                            }
+                            if (step.error != null) {
+                                append("   ❌ ${step.error}\n")
+                            }
+                            append("\n")
+                        }
+                        
+                        if (executionResult.success) {
+                            append("✅ Скрипт выполнен успешно")
+                        } else {
+                            append("❌ Скрипт завершён с ошибками")
+                        }
+                    }
+                    
+                    mapOf(
+                        "content" to listOf(
+                            mapOf("type" to "text", "text" to message)
+                        )
+                    )
+                },
+                onFailure = { error ->
+                    createErrorMessage("Ошибка выполнения скрипта: ${error.message}")
+                }
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    // ==================== Termux Tools ====================
+    
+    private suspend fun termuxInfo(): Map<String, Any> {
+        return try {
+            val result = termuxService.getTermuxInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun termuxCommand(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val command = arguments?.get("command")?.asString
+            
+            if (command.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать команду")
+            }
+            
+            val result = termuxService.executeCommand(command)
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    // ==================== ADB WiFi Tools ====================
+    
+    private suspend fun adbWifiInfo(): Map<String, Any> {
+        return try {
+            val result = adbWifiService.getAdbWifiInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun sshInfo(): Map<String, Any> {
+        return try {
+            val result = adbWifiService.getSshInfo()
+            createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    // ==================== Helper Methods ====================
+    
+    private fun createToolResponse(result: Result<String>): Map<String, Any> {
+        val text = if (result.isSuccess) {
+            result.getOrNull() ?: "Операция выполнена"
+        } else {
+            "❌ Ошибка: ${result.exceptionOrNull()?.message}"
+        }
+        
+        return mapOf(
+            "content" to listOf(
+                mapOf("type" to "text", "text" to text)
+            )
+        )
+    }
+    
+    private fun createErrorResponse(e: Exception): Map<String, Any> {
+        return mapOf(
+            "content" to listOf(
+                mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+            )
+        )
+    }
+    
+    private fun createErrorMessage(message: String): Map<String, Any> {
+        return mapOf(
+            "content" to listOf(
+                mapOf("type" to "text", "text" to "❌ $message")
+            )
+        )
     }
     
     // ==================== Helper Methods ====================

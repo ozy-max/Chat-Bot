@@ -1131,18 +1131,69 @@ class ChatViewModel(
                         handleStartAppCommand(packageName)
                     }
                     
+                    // System Monitor команды
+                    "monitor", "system" -> {
+                        handleSystemMonitorCommand()
+                    }
+                    
+                    "battery" -> {
+                        handleBatteryCommand()
+                    }
+                    
+                    "memory" -> {
+                        handleMemoryCommand()
+                    }
+                    
+                    "cpu" -> {
+                        handleCpuCommand()
+                    }
+                    
+                    "network" -> {
+                        handleNetworkCommand()
+                    }
+                    
+                    "storage" -> {
+                        handleStorageCommand()
+                    }
+                    
+                    // File Manager команды
+                    "fm", "filemanager" -> {
+                        val subcommand = parts.getOrNull(1) ?: ""
+                        handleFileManagerCommand(subcommand, parts.drop(2))
+                    }
+                    
+                    // Script Automation команды
+                    "scripts" -> {
+                        handleScriptsListCommand()
+                    }
+                    
+                    // Termux команды
+                    "termux" -> {
+                        val subcommand = parts.getOrNull(1) ?: "info"
+                        if (subcommand == "info") {
+                            handleTermuxInfoCommand()
+                        } else {
+                            val command = parts.drop(1).joinToString(" ").trim()
+                            handleTermuxExecuteCommand(command)
+                        }
+                    }
+                    
+                    // ADB WiFi команды
+                    "wifi", "remote" -> {
+                        handleAdbWifiCommand()
+                    }
+                    
+                    "ssh" -> {
+                        handleSshInfoCommand()
+                    }
+                    
+                    "help" -> {
+                        addBotMessage(getHelpMessage())
+                        _uiState.update { it.copy(isLoading = false) }
+                    }
+                    
                     else -> {
-                        addBotMessage("❌ Неизвестная команда.\n\n" +
-                            "📱 Основные:\n" +
-                            "/weather, /task, /summary, /sync\n\n" +
-                            "🔍 Поиск и пайплайны:\n" +
-                            "/pipeline [запрос], /files\n\n" +
-                            "🛠️ ADB команды:\n" +
-                            "/screenshot - скриншот\n" +
-                            "/logs [кол-во] - логи приложения\n" +
-                            "/device - инфо об устройстве\n" +
-                            "/apps [лимит] - список приложений\n" +
-                            "/start [пакет] - запустить приложение")
+                        addBotMessage(getHelpMessage())
                         _uiState.update { it.copy(isLoading = false) }
                     }
                 }
@@ -1386,6 +1437,272 @@ class ChatViewModel(
                 sendToYandexGpt()
             }
         }
+    }
+    
+    // ==================== System Monitor Commands ====================
+    
+    private suspend fun handleSystemMonitorCommand() {
+        val result = mcpClient?.callTool("system_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val systemInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(systemInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения системной информации: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleBatteryCommand() {
+        val result = mcpClient?.callTool("battery_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val batteryInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(batteryInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации о батарее: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleMemoryCommand() {
+        val result = mcpClient?.callTool("memory_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val memoryInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(memoryInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации о памяти: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleCpuCommand() {
+        val result = mcpClient?.callTool("cpu_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val cpuInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(cpuInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации о процессоре: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleNetworkCommand() {
+        val result = mcpClient?.callTool("network_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val networkInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(networkInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения сетевой информации: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleStorageCommand() {
+        val result = mcpClient?.callTool("storage_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val storageInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(storageInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации о хранилище: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    // ==================== File Manager Commands ====================
+    
+    private suspend fun handleFileManagerCommand(subcommand: String, args: List<String>) {
+        when (subcommand) {
+            "list", "ls" -> {
+                val path = args.joinToString(" ").trim()
+                val result = mcpClient?.callTool("fm_list", if (path.isBlank()) emptyMap() else mapOf("path" to path))
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Пусто")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "read", "cat" -> {
+                val path = args.joinToString(" ").trim()
+                if (path.isBlank()) {
+                    addBotMessage("❌ Укажите путь: /fm read <путь>")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                val result = mcpClient?.callTool("fm_read", mapOf("path" to path))
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Файл пустой")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "search", "find" -> {
+                val pattern = args.joinToString(" ").trim()
+                if (pattern.isBlank()) {
+                    addBotMessage("❌ Укажите шаблон: /fm search <шаблон>")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                val result = mcpClient?.callTool("fm_search", mapOf("pattern" to pattern))
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Ничего не найдено")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            else -> {
+                addBotMessage("❌ Неизвестная подкоманда.\n\n" +
+                    "Доступные команды:\n" +
+                    "/fm list [путь] - список файлов\n" +
+                    "/fm read <путь> - прочитать файл\n" +
+                    "/fm search <шаблон> - найти файлы")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    // ==================== Script Automation Commands ====================
+    
+    private suspend fun handleScriptsListCommand() {
+        val result = mcpClient?.callTool("script_list", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val scriptsList = toolResult.content.firstOrNull()?.text ?: "Нет скриптов"
+            addBotMessage(scriptsList)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения списка скриптов: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    // ==================== Termux Commands ====================
+    
+    private suspend fun handleTermuxInfoCommand() {
+        val result = mcpClient?.callTool("termux_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val termuxInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(termuxInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации о Termux: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleTermuxExecuteCommand(command: String) {
+        if (command.isBlank()) {
+            addBotMessage("❌ Укажите команду: /termux <команда>")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        val result = mcpClient?.callTool("termux_command", mapOf("command" to command))
+        
+        result?.onSuccess { toolResult ->
+            val output = toolResult.content.firstOrNull()?.text ?: "Команда отправлена"
+            addBotMessage(output)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка выполнения команды: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    // ==================== ADB WiFi Commands ====================
+    
+    private suspend fun handleAdbWifiCommand() {
+        val result = mcpClient?.callTool("adb_wifi_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val wifiInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(wifiInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleSshInfoCommand() {
+        val result = mcpClient?.callTool("ssh_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val sshInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(sshInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    // ==================== Help ====================
+    
+    private fun getHelpMessage(): String {
+        return """
+            📚 ДОСТУПНЫЕ КОМАНДЫ
+            
+            📱 ОСНОВНЫЕ:
+            /weather [город] - погода
+            /task [add|list|complete] - задачи
+            /summary - сводка задач
+            /sync - синхронизация с Todoist
+            
+            🔍 ПОИСК И ПАЙПЛАЙНЫ:
+            /pipeline [запрос] - автоматический поиск и анализ
+            /files - список сохранённых файлов
+            
+            🛠️ ADB КОМАНДЫ:
+            /screenshot - скриншот экрана
+            /logs [N] - логи приложения
+            /device - информация об устройстве
+            /apps [N] - список приложений
+            /start [пакет] - запустить приложение
+            
+            📊 МОНИТОРИНГ СИСТЕМЫ:
+            /monitor, /system - полная информация о системе
+            /battery - состояние батареи
+            /memory - использование памяти
+            /cpu - информация о процессоре
+            /network - сетевое подключение
+            /storage - хранилище
+            
+            📁 ФАЙЛОВЫЙ МЕНЕДЖЕР:
+            /fm list [путь] - список файлов
+            /fm read <путь> - прочитать файл
+            /fm search <шаблон> - найти файлы
+            
+            🤖 АВТОМАТИЗАЦИЯ:
+            /scripts - список скриптов
+            
+            💻 TERMUX:
+            /termux - информация о Termux
+            /termux <команда> - выполнить команду
+            
+            📡 УДАЛЁННОЕ УПРАВЛЕНИЕ:
+            /wifi, /remote - ADB over WiFi
+            /ssh - SSH через Termux
+            
+            /help - показать эту справку
+        """.trimIndent()
     }
     
     // ==================== ADB Commands ====================

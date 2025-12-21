@@ -1102,8 +1102,47 @@ class ChatViewModel(
                         handleFilesCommand()
                     }
                     
+                    // ADB команды
+                    "screenshot" -> {
+                        handleScreenshotCommand()
+                    }
+                    
+                    "logs" -> {
+                        val lines = parts.getOrNull(1)?.toIntOrNull() ?: 100
+                        handleLogsCommand(lines)
+                    }
+                    
+                    "device" -> {
+                        handleDeviceInfoCommand()
+                    }
+                    
+                    "apps" -> {
+                        val limit = parts.getOrNull(1)?.toIntOrNull() ?: 20
+                        handleListAppsCommand(limit)
+                    }
+                    
+                    "start" -> {
+                        val packageName = parts.drop(1).joinToString(" ").trim()
+                        if (packageName.isBlank()) {
+                            addBotMessage("❌ Укажите имя пакета: /start com.example.app")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handleStartAppCommand(packageName)
+                    }
+                    
                     else -> {
-                        addBotMessage("❌ Неизвестная команда. Доступны: /weather, /task, /summary, /sync, /pipeline, /files")
+                        addBotMessage("❌ Неизвестная команда.\n\n" +
+                            "📱 Основные:\n" +
+                            "/weather, /task, /summary, /sync\n\n" +
+                            "🔍 Поиск и пайплайны:\n" +
+                            "/pipeline [запрос], /files\n\n" +
+                            "🛠️ ADB команды:\n" +
+                            "/screenshot - скриншот\n" +
+                            "/logs [кол-во] - логи приложения\n" +
+                            "/device - инфо об устройстве\n" +
+                            "/apps [лимит] - список приложений\n" +
+                            "/start [пакет] - запустить приложение")
                         _uiState.update { it.copy(isLoading = false) }
                     }
                 }
@@ -1348,6 +1387,75 @@ class ChatViewModel(
             }
         }
     }
+    
+    // ==================== ADB Commands ====================
+    
+    private suspend fun handleScreenshotCommand() {
+        val result = mcpClient?.callTool("screenshot", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val screenshotText = toolResult.content.firstOrNull()?.text ?: "Скриншот создан"
+            addBotMessage(screenshotText)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка создания скриншота: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleLogsCommand(lines: Int) {
+        val result = mcpClient?.callTool("get_logs", mapOf("lines" to lines))
+        
+        result?.onSuccess { toolResult ->
+            val logsText = toolResult.content.firstOrNull()?.text ?: "Логи не найдены"
+            addBotMessage(logsText)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения логов: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleDeviceInfoCommand() {
+        val result = mcpClient?.callTool("device_info", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val deviceInfo = toolResult.content.firstOrNull()?.text ?: "Информация недоступна"
+            addBotMessage(deviceInfo)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения информации: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleListAppsCommand(limit: Int) {
+        val result = mcpClient?.callTool("list_apps", mapOf("limit" to limit))
+        
+        result?.onSuccess { toolResult ->
+            val appsText = toolResult.content.firstOrNull()?.text ?: "Приложения не найдены"
+            addBotMessage(appsText)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения списка приложений: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleStartAppCommand(packageName: String) {
+        val result = mcpClient?.callTool("start_app", mapOf("package_name" to packageName))
+        
+        result?.onSuccess { toolResult ->
+            val startText = toolResult.content.firstOrNull()?.text ?: "Приложение запущено"
+            addBotMessage(startText)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка запуска приложения: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    // ==================== Helper Methods ====================
     
     private fun addBotMessage(text: String) {
         val botMsg = Message(text = text, isUser = false)

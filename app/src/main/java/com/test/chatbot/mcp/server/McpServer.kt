@@ -29,6 +29,7 @@ class McpServer(
     private lateinit var webSearchService: WebSearchService
     private lateinit var fileStorageService: FileStorageService
     private lateinit var pipelineAgent: PipelineAgent
+    private lateinit var adbService: AdbService
 
     companion object {
         private const val TAG = "McpServer"
@@ -50,6 +51,7 @@ class McpServer(
             
             webSearchService = WebSearchService()
             fileStorageService = FileStorageService(context)
+            adbService = AdbService(context)
             val chatRepository = com.test.chatbot.repository.ChatRepository()
             pipelineAgent = PipelineAgent(context, todoistService, chatRepository)
             
@@ -330,6 +332,85 @@ class McpServer(
                         "properties" to mapOf<String, Any>(),
                         "required" to emptyList<String>()
                     )
+                ),
+                // ADB Tools
+                mapOf(
+                    "name" to "screenshot",
+                    "description" to "Сделать скриншот экрана устройства",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "get_logs",
+                    "description" to "Получить логи приложения",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "package_name" to mapOf(
+                                "type" to "string",
+                                "description" to "Имя пакета приложения (опционально, по умолчанию текущее)"
+                            ),
+                            "lines" to mapOf(
+                                "type" to "number",
+                                "description" to "Количество строк логов (по умолчанию 100)"
+                            )
+                        ),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "device_info",
+                    "description" to "Получить информацию об устройстве (модель, Android версия, память)",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "start_app",
+                    "description" to "Запустить приложение по имени пакета",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "package_name" to mapOf(
+                                "type" to "string",
+                                "description" to "Имя пакета приложения для запуска"
+                            )
+                        ),
+                        "required" to listOf("package_name")
+                    )
+                ),
+                mapOf(
+                    "name" to "shell_command",
+                    "description" to "Выполнить shell команду на устройстве",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "command" to mapOf(
+                                "type" to "string",
+                                "description" to "Shell команда для выполнения"
+                            )
+                        ),
+                        "required" to listOf("command")
+                    )
+                ),
+                mapOf(
+                    "name" to "list_apps",
+                    "description" to "Получить список установленных приложений",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "limit" to mapOf(
+                                "type" to "number",
+                                "description" to "Максимальное количество приложений (по умолчанию 20)"
+                            )
+                        ),
+                        "required" to emptyList<String>()
+                    )
                 )
             )
         )
@@ -351,6 +432,13 @@ class McpServer(
             "save_to_file" -> runBlocking { saveToFile(arguments) }
             "run_pipeline" -> runBlocking { runPipeline(arguments) }
             "list_files" -> runBlocking { listFiles() }
+            // ADB Tools
+            "screenshot" -> runBlocking { takeScreenshot() }
+            "get_logs" -> runBlocking { getAppLogs(arguments) }
+            "device_info" -> runBlocking { getDeviceInfo() }
+            "start_app" -> runBlocking { startApp(arguments) }
+            "shell_command" -> runBlocking { executeShellCommand(arguments) }
+            "list_apps" -> runBlocking { listInstalledApps(arguments) }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -596,6 +684,209 @@ class McpServer(
         }
     }
 
+    // ==================== ADB Tools ====================
+    
+    /**
+     * Сделать скриншот экрана
+     */
+    private suspend fun takeScreenshot(): Map<String, Any> {
+        return try {
+            val result = adbService.takeScreenshot()
+            
+            val text = if (result.isSuccess) {
+                val path = result.getOrNull()
+                "✅ Скриншот успешно сохранён:\n$path"
+            } else {
+                "❌ Ошибка создания скриншота: ${result.exceptionOrNull()?.message}\n\n" +
+                "💡 Для создания скриншотов могут потребоваться дополнительные разрешения или root права."
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+    
+    /**
+     * Получить логи приложения
+     */
+    private suspend fun getAppLogs(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val packageName = arguments?.get("package_name")?.asString
+            val lines = arguments?.get("lines")?.asInt ?: 100
+            
+            val result = if (packageName.isNullOrBlank()) {
+                adbService.getAppLogs(lines = lines)
+            } else {
+                adbService.getAppLogs(packageName, lines)
+            }
+            
+            val text = if (result.isSuccess) {
+                val logs = result.getOrNull() ?: "Логов не найдено"
+                "📋 Логи приложения:\n\n$logs"
+            } else {
+                "❌ Ошибка получения логов: ${result.exceptionOrNull()?.message}"
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+    
+    /**
+     * Получить информацию об устройстве
+     */
+    private suspend fun getDeviceInfo(): Map<String, Any> {
+        return try {
+            val result = adbService.getDeviceInfo()
+            
+            val text = if (result.isSuccess) {
+                result.getOrNull() ?: "Информация недоступна"
+            } else {
+                "❌ Ошибка получения информации: ${result.exceptionOrNull()?.message}"
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+    
+    /**
+     * Запустить приложение
+     */
+    private suspend fun startApp(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val packageName = arguments?.get("package_name")?.asString
+            
+            if (packageName.isNullOrBlank()) {
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Необходимо указать имя пакета")
+                    )
+                )
+            }
+            
+            val result = adbService.startApp(packageName)
+            
+            val text = if (result.isSuccess) {
+                "✅ ${result.getOrNull()}"
+            } else {
+                "❌ Ошибка запуска приложения: ${result.exceptionOrNull()?.message}"
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+    
+    /**
+     * Выполнить shell команду
+     */
+    private suspend fun executeShellCommand(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val command = arguments?.get("command")?.asString
+            
+            if (command.isNullOrBlank()) {
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Необходимо указать команду")
+                    )
+                )
+            }
+            
+            val result = adbService.executeShellCommand(command)
+            
+            val text = if (result.isSuccess) {
+                val output = result.getOrNull()
+                if (output.isNullOrBlank()) {
+                    "✅ Команда выполнена успешно (вывод пустой)"
+                } else {
+                    "✅ Результат выполнения:\n\n$output"
+                }
+            } else {
+                "❌ Ошибка выполнения команды: ${result.exceptionOrNull()?.message}"
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+    
+    /**
+     * Получить список установленных приложений
+     */
+    private suspend fun listInstalledApps(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val limit = arguments?.get("limit")?.asInt ?: 20
+            
+            val result = adbService.getInstalledApps(limit)
+            
+            val text = if (result.isSuccess) {
+                result.getOrNull() ?: "Приложений не найдено"
+            } else {
+                "❌ Ошибка получения списка приложений: ${result.exceptionOrNull()?.message}"
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                )
+            )
+        }
+    }
+    
+    // ==================== Helper Methods ====================
+    
     /**
      * JSON ответ
      */

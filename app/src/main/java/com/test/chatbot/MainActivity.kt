@@ -22,6 +22,9 @@ import com.test.chatbot.presentation.ChatScreen
 import com.test.chatbot.presentation.ChatViewModel
 import com.test.chatbot.presentation.ChatViewModelFactory
 import com.test.chatbot.ui.theme.ChatBotTheme
+import com.test.chatbot.utils.DemoDocsInitializer
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     
@@ -47,6 +50,12 @@ class MainActivity : ComponentActivity() {
         // Используем Factory для передачи PreferencesRepository
         val factory = ChatViewModelFactory(applicationContext)
         viewModel = ViewModelProvider(this, factory)[ChatViewModel::class.java]
+        
+        // Загружаем демо-документы при первом запуске
+        lifecycleScope.launch {
+            val demoDocsInitializer = DemoDocsInitializer(applicationContext)
+            demoDocsInitializer.initializeDemoDocsIfNeeded()
+        }
         
         setContent {
             ChatBotTheme {

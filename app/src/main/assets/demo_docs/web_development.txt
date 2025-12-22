@@ -1,0 +1,283 @@
+Веб-разработка
+
+Веб-разработка - создание веб-сайтов и веб-приложений. Делится на Frontend (клиентская часть) и Backend (серверная часть).
+
+Frontend разработка
+
+HTML (HyperText Markup Language)
+Язык разметки для структуры веб-страниц. Определяет содержимое: заголовки, параграфы, ссылки, изображения.
+
+Основные теги:
+- <div> - контейнер
+- <p> - параграф
+- <a> - ссылка
+- <img> - изображение
+- <form> - форма
+- <button> - кнопка
+
+HTML5 семантические теги:
+<header>, <nav>, <main>, <article>, <section>, <aside>, <footer>
+
+CSS (Cascading Style Sheets)
+Язык стилей для оформления HTML. Управляет цветами, шрифтами, размерами, позиционированием.
+
+Селекторы:
+- .class - по классу
+- #id - по идентификатору
+- element - по тегу
+- [attribute] - по атрибуту
+
+Flexbox
+Одномерная система компоновки для выравнивания элементов.
+
+Grid
+Двумерная система для создания сложных макетов.
+
+Responsive Design
+Адаптация под разные размеры экранов. Media queries для различных устройств.
+
+@media (max-width: 768px) {
+  /* Стили для мобильных */
+}
+
+JavaScript
+Язык программирования для интерактивности веб-страниц.
+
+ES6+ возможности:
+- Let/const - блочная область видимости
+- Arrow functions - => синтаксис
+- Template literals - строки с интерполяцией
+- Destructuring - деструктуризация
+- Spread operator - ...
+- Promises - асинхронность
+- Async/await - синхронный стиль асинхронного кода
+
+DOM (Document Object Model)
+API для взаимодействия с HTML. Позволяет изменять структуру, стили, содержимое страницы.
+
+document.querySelector('#id')
+element.addEventListener('click', handler)
+element.classList.add('active')
+
+Frontend фреймворки
+
+React
+Библиотека для создания пользовательских интерфейсов от Facebook/Meta.
+
+Концепции:
+- Components - переиспользуемые компоненты
+- JSX - синтаксис похожий на HTML в JavaScript
+- Virtual DOM - виртуальное представление DOM
+- Hooks - useState, useEffect для состояния
+- Props - передача данных в компоненты
+
+Vue.js
+Прогрессивный фреймворк для создания UI. Проще чем React.
+
+Особенности:
+- Single File Components (.vue файлы)
+- Reactive data binding
+- Directives - v-if, v-for, v-model
+- Composition API
+
+Angular
+Полноценный фреймворк от Google. TypeScript по умолчанию.
+
+Концепции:
+- Components и Templates
+- Services для бизнес-логики
+- Dependency Injection
+- RxJS для реактивности
+- Angular CLI для генерации кода
+
+TypeScript
+Типизированный JavaScript. Статическая типизация помогает избежать ошибок.
+
+Преимущества:
+- Автодополнение в IDE
+- Раннее обнаружение ошибок
+- Рефакторинг
+- Interfaces и Types
+
+State Management
+Управление состоянием приложения:
+- Redux - централизованное хранилище
+- MobX - реактивное состояние
+- Zustand - минималистичное решение
+- Recoil - атомарное состояние
+- Vue: Vuex, Pinia
+- Angular: NgRx
+
+Backend разработка
+
+Node.js
+JavaScript runtime на основе V8. Позволяет запускать JS на сервере.
+
+Особенности:
+- Event-driven архитектура
+- Non-blocking I/O
+- NPM - менеджер пакетов
+- Единый язык для frontend и backend
+
+Express.js
+Минималистичный веб-фреймворк для Node.js.
+
+Основы:
+- Routing - маршрутизация запросов
+- Middleware - промежуточные обработчики
+- Template engines - шаблонизаторы
+- Static files - статические файлы
+
+REST API
+Архитектурный стиль для веб-сервисов.
+
+HTTP методы:
+- GET - получение данных
+- POST - создание
+- PUT/PATCH - обновление
+- DELETE - удаление
+
+Статус коды:
+- 200 OK - успешно
+- 201 Created - создано
+- 400 Bad Request - ошибка клиента
+- 401 Unauthorized - не авторизован
+- 404 Not Found - не найдено
+- 500 Internal Server Error - ошибка сервера
+
+GraphQL
+Язык запросов для API. Клиент запрашивает только нужные данные.
+
+Преимущества:
+- Точечные запросы
+- Единая точка входа
+- Strongly typed schema
+- Real-time subscriptions
+
+Базы данных
+
+SQL (Реляционные)
+Структурированные данные в таблицах со связями.
+
+Популярные:
+- PostgreSQL - мощная и расширяемая
+- MySQL - простая и популярная
+- SQLite - встраиваемая
+
+ORM (Object-Relational Mapping):
+- Sequelize (Node.js)
+- TypeORM (TypeScript)
+- Prisma - современный ORM
+
+NoSQL (Нереляционные)
+Гибкая схема данных.
+
+Типы:
+- Document stores - MongoDB, CouchDB
+- Key-value - Redis, DynamoDB
+- Column-family - Cassandra
+- Graph - Neo4j
+
+Аутентификация и авторизация
+
+JWT (JSON Web Tokens)
+Токены для stateless аутентификации. Содержат закодированную информацию о пользователе.
+
+OAuth 2.0
+Стандарт для делегированной авторизации. "Войти через Google/Facebook".
+
+Session-based
+Хранение сессии на сервере. Cookie с session ID на клиенте.
+
+Безопасность
+
+HTTPS
+Шифрование трафика через TLS/SSL. Обязательно для production.
+
+CORS (Cross-Origin Resource Sharing)
+Политика браузера для запросов между доменами.
+
+XSS (Cross-Site Scripting)
+Атака через внедрение скриптов. Защита: санитизация ввода, Content Security Policy.
+
+SQL Injection
+Внедрение SQL кода. Защита: параметризованные запросы, ORM.
+
+CSRF (Cross-Site Request Forgery)
+Подделка запросов. Защита: CSRF токены, SameSite cookies.
+
+Деплой и DevOps
+
+Hosting
+- Vercel - для фронтенда (Next.js)
+- Netlify - статические сайты
+- Heroku - полноценные приложения
+- AWS, Google Cloud, Azure - облачные платформы
+- DigitalOcean - VPS
+
+Docker
+Контейнеризация приложений. Изолированная среда выполнения.
+
+CI/CD
+Continuous Integration / Continuous Deployment:
+- GitHub Actions
+- GitLab CI
+- Jenkins
+- CircleCI
+
+Мониторинг
+- Sentry - отслеживание ошибок
+- New Relic - производительность
+- Google Analytics - аналитика
+
+Современные тренды
+
+JAMstack
+JavaScript, APIs, Markup. Статическая генерация сайтов.
+
+Frameworks:
+- Next.js (React)
+- Nuxt.js (Vue)
+- Gatsby (React)
+- Astro
+
+SSR vs SSG vs CSR
+- Server-Side Rendering - рендеринг на сервере
+- Static Site Generation - предварительная генерация
+- Client-Side Rendering - рендеринг в браузере
+
+Serverless
+Функции без управления серверами:
+- AWS Lambda
+- Vercel Functions
+- Netlify Functions
+- Cloudflare Workers
+
+WebAssembly (WASM)
+Компиляция языков (C++, Rust) в байткод для браузера. Высокая производительность.
+
+Progressive Web Apps (PWA)
+Веб-приложения с функциями нативных:
+- Работа офлайн
+- Push уведомления
+- Установка на устройство
+- Service Workers
+
+Web Performance
+Оптимизация производительности:
+- Code splitting - разделение кода
+- Lazy loading - отложенная загрузка
+- Image optimization - оптимизация изображений
+- Caching - кеширование
+- CDN - сеть доставки контента
+- Tree shaking - удаление неиспользуемого кода
+- Minification - минификация
+- Compression - gzip/brotli сжатие
+
+Тестирование
+- Jest - unit тесты
+- Mocha/Chai - альтернатива Jest
+- Cypress - E2E тесты
+- Playwright - E2E тестирование
+- React Testing Library - тестирование компонентов
+

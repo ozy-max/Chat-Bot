@@ -44,17 +44,50 @@ class McpServer(
     private lateinit var scriptAutomationService: ScriptAutomationService
     private lateinit var termuxService: TermuxService
     private lateinit var adbWifiService: AdbWifiService
+    
+    // RAG (Retrieval-Augmented Generation)
+    private lateinit var documentIndexService: com.test.chatbot.rag.DocumentIndexService
+    private var ollamaClient: com.test.chatbot.rag.OllamaClient? = null
+    private var ollamaRAGService: com.test.chatbot.rag.OllamaRAGService? = null
+    
+    // Ollama configuration
+    private var ollamaUrl: String = ""
+    private var ollamaEnabled: Boolean = false
 
     companion object {
         private const val TAG = "McpServer"
         const val DEFAULT_PORT = 3000
+        private const val PREFS_NAME = "mcp_server_prefs"
+        private const val PREF_OLLAMA_URL = "ollama_url"
+        private const val DEFAULT_OLLAMA_URL = "http://10.0.2.2:11434" // Для эмулятора
     }
 
+    /**
+     * Загрузить сохранённый URL Ollama
+     */
+    private fun loadOllamaUrl() {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        ollamaUrl = prefs.getString(PREF_OLLAMA_URL, DEFAULT_OLLAMA_URL) ?: DEFAULT_OLLAMA_URL
+        Log.i(TAG, "📋 Загружен Ollama URL: $ollamaUrl")
+    }
+    
+    /**
+     * Сохранить URL Ollama
+     */
+    private fun saveOllamaUrl(url: String) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(PREF_OLLAMA_URL, url).apply()
+        Log.i(TAG, "💾 Сохранён Ollama URL: $url")
+    }
+    
     /**
      * Инициализация сервера
      */
     fun initialize() {
         try {
+            // Загружаем сохранённый URL Ollama
+            loadOllamaUrl()
+            
             taskRepository = TaskRepository(context)
             todoistService = TodoistService()
             schedulerManager = SchedulerManager(
@@ -73,6 +106,29 @@ class McpServer(
             scriptAutomationService = ScriptAutomationService(context)
             termuxService = TermuxService(context)
             adbWifiService = AdbWifiService(context)
+            
+            // RAG system with Ollama support
+            try {
+                ollamaClient = com.test.chatbot.rag.OllamaClient(ollamaUrl)
+                // Проверяем доступность в фоне
+                scope.launch {
+                ollamaEnabled = ollamaClient?.isAvailable() ?: false
+                if (ollamaEnabled) {
+                    Log.i(TAG, "✅ Ollama доступна на $ollamaUrl")
+                    // Создаём DocumentIndexService перед RAG сервисом
+                    documentIndexService = com.test.chatbot.rag.DocumentIndexService(context, ollamaClient)
+                    ollamaRAGService = com.test.chatbot.rag.OllamaRAGService(documentIndexService, ollamaClient!!)
+                } else {
+                    Log.w(TAG, "⚠️ Ollama недоступна, используется локальный режим")
+                    // Создаём DocumentIndexService с локальными эмбеддингами
+                    documentIndexService = com.test.chatbot.rag.DocumentIndexService(context, ollamaClient)
+                }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Ошибка инициализации Ollama: ${e.message}")
+                // Fallback на локальный режим
+                documentIndexService = com.test.chatbot.rag.DocumentIndexService(context, null)
+            }
             
             val chatRepository = com.test.chatbot.repository.ChatRepository()
             pipelineAgent = PipelineAgent(context, todoistService, chatRepository)
@@ -648,6 +704,130 @@ class McpServer(
                         "properties" to mapOf<String, Any>(),
                         "required" to emptyList<String>()
                     )
+                ),
+                // RAG (Vector Search) Tools
+                mapOf(
+                    "name" to "index_text",
+                    "description" to "Проиндексировать текст для векторного поиска",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "name" to mapOf(
+                                "type" to "string",
+                                "description" to "Название документа"
+                            ),
+                            "content" to mapOf(
+                                "type" to "string",
+                                "description" to "Содержимое документа"
+                            ),
+                            "type" to mapOf(
+                                "type" to "string",
+                                "description" to "Тип документа (text, markdown, code)"
+                            )
+                        ),
+                        "required" to listOf("name", "content")
+                    )
+                ),
+                mapOf(
+                    "name" to "index_file",
+                    "description" to "Проиндексировать файл для векторного поиска",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "file_path" to mapOf(
+                                "type" to "string",
+                                "description" to "Путь к файлу (относительно app_files)"
+                            )
+                        ),
+                        "required" to listOf("file_path")
+                    )
+                ),
+                mapOf(
+                    "name" to "semantic_search",
+                    "description" to "Семантический поиск по проиндексированным документам",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "query" to mapOf(
+                                "type" to "string",
+                                "description" to "Поисковый запрос"
+                            ),
+                            "top_k" to mapOf(
+                                "type" to "number",
+                                "description" to "Количество результатов (по умолчанию 5)"
+                            )
+                        ),
+                        "required" to listOf("query")
+                    )
+                ),
+                mapOf(
+                    "name" to "list_indexed_docs",
+                    "description" to "Получить список проиндексированных документов",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "index_stats",
+                    "description" to "Получить статистику векторного индекса",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "clear_index",
+                    "description" to "Очистить векторный индекс",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                // Ollama Tools
+                mapOf(
+                    "name" to "ollama_status",
+                    "description" to "Проверить статус Ollama сервера и список моделей",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "ollama_configure",
+                    "description" to "Настроить URL Ollama сервера",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "url" to mapOf(
+                                "type" to "string",
+                                "description" to "URL Ollama сервера (например: http://192.168.1.100:11434)"
+                            )
+                        ),
+                        "required" to listOf("url")
+                    )
+                ),
+                mapOf(
+                    "name" to "rag_query",
+                    "description" to "Задать вопрос с использованием RAG (поиск + генерация ответа через Ollama)",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "question" to mapOf(
+                                "type" to "string",
+                                "description" to "Вопрос для RAG системы"
+                            ),
+                            "top_k" to mapOf(
+                                "type" to "number",
+                                "description" to "Количество релевантных документов (по умолчанию 3)"
+                            )
+                        ),
+                        "required" to listOf("question")
+                    )
                 )
             )
         )
@@ -699,6 +879,18 @@ class McpServer(
             // ADB WiFi Tools
             "adb_wifi_info" -> runBlocking { adbWifiInfo() }
             "ssh_info" -> runBlocking { sshInfo() }
+            // RAG Tools
+            "index_text" -> runBlocking { indexText(arguments) }
+            "index_file" -> runBlocking { indexFile(arguments) }
+            "semantic_search" -> runBlocking { semanticSearch(arguments) }
+            "list_indexed_docs" -> runBlocking { listIndexedDocs() }
+            "index_stats" -> runBlocking { indexStats() }
+            "clear_index" -> runBlocking { clearIndex() }
+            "reset_database" -> runBlocking { resetDatabase() }
+            // Ollama Tools
+            "ollama_status" -> runBlocking { ollamaStatus() }
+            "ollama_configure" -> runBlocking { ollamaConfigure(arguments) }
+            "rag_query" -> runBlocking { ragQuery(arguments) }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -1393,6 +1585,343 @@ class McpServer(
         return try {
             val result = adbWifiService.getSshInfo()
             createToolResponse(result)
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    // ==================== RAG (Vector Search) Tools ====================
+    
+    private suspend fun indexText(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val name = arguments?.get("name")?.asString
+            val content = arguments?.get("content")?.asString
+            val type = arguments?.get("type")?.asString ?: "text"
+            
+            if (name.isNullOrBlank() || content.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать name и content")
+            }
+            
+            val result = documentIndexService.indexDocument(name, content, type)
+            
+            if (result.isSuccess) {
+                val indexResult = result.getOrNull()!!
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to indexResult.toSummary())
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка индексации: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun indexFile(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val filePath = arguments?.get("file_path")?.asString
+            
+            if (filePath.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать file_path")
+            }
+            
+            // Полный путь к файлу в app files
+            val fullPath = context.filesDir.absolutePath + "/" + filePath
+            
+            val result = documentIndexService.indexFile(fullPath)
+            
+            if (result.isSuccess) {
+                val indexResult = result.getOrNull()!!
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to indexResult.toSummary())
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка индексации файла: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun semanticSearch(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val query = arguments?.get("query")?.asString
+            val topK = arguments?.get("top_k")?.asInt ?: 5
+            
+            if (query.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать query")
+            }
+            
+            val result = documentIndexService.search(query, topK)
+            
+            if (result.isSuccess) {
+                val results = result.getOrNull()!!
+                
+                val text = buildString {
+                    append("🔍 Результаты поиска: \"$query\"\n")
+                    append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                    
+                    if (results.isEmpty()) {
+                        append("Ничего не найдено\n")
+                    } else {
+                        results.forEachIndexed { index, searchResult ->
+                            append("${index + 1}. ${searchResult.docName} (${searchResult.docType})\n")
+                            append("   Релевантность: ${(searchResult.similarity * 100).toInt()}%\n")
+                            append("   Текст: ${searchResult.chunkText.take(150)}")
+                            if (searchResult.chunkText.length > 150) append("...")
+                            append("\n\n")
+                        }
+                        
+                        append("Найдено: ${results.size} результатов")
+                    }
+                }
+                
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to text)
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка поиска: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun listIndexedDocs(): Map<String, Any> {
+        return try {
+            val result = documentIndexService.listDocuments()
+            
+            if (result.isSuccess) {
+                val documents = result.getOrNull()!!
+                
+                val text = buildString {
+                    append("📚 Проиндексированные документы (${documents.size})\n")
+                    append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                    
+                    if (documents.isEmpty()) {
+                        append("Нет проиндексированных документов\n\n")
+                        append("Используйте /index для индексации файлов")
+                    } else {
+                        documents.forEach { doc ->
+                            append("📄 ${doc.name} (${doc.type})\n")
+                            append("   ID: ${doc.id}\n")
+                            append("   Размер: ${doc.content.length} символов\n")
+                            append("   Создан: ${formatTimestamp(doc.createdAt)}\n\n")
+                        }
+                    }
+                }
+                
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to text)
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка получения списка: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun indexStats(): Map<String, Any> {
+        return try {
+            val verificationResult = documentIndexService.verifyIndex()
+            
+            if (verificationResult.isSuccess) {
+                val verification = verificationResult.getOrNull()!!
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to verification.toSummary())
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка получения статистики: ${verificationResult.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun clearIndex(): Map<String, Any> {
+        return try {
+            val result = documentIndexService.clearIndex()
+            
+            if (result.isSuccess) {
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "✅ Векторный индекс очищен")
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка очистки индекса: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun resetDatabase(): Map<String, Any> {
+        return try {
+            val result = documentIndexService.resetDatabase(context)
+            
+            if (result.isSuccess) {
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "✅ База данных RAG полностью удалена и пересоздана\n\n" +
+                                "Теперь выполните: /index demo")
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка сброса БД: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private fun formatTimestamp(timestamp: Long): String {
+        val sdf = java.text.SimpleDateFormat("dd.MM.yyyy HH:mm", java.util.Locale.getDefault())
+        return sdf.format(java.util.Date(timestamp))
+    }
+    
+    // ==================== Ollama Tools ====================
+    
+    private suspend fun ollamaStatus(): Map<String, Any> {
+        return try {
+            if (ollamaClient == null) {
+                return createErrorMessage("Ollama клиент не инициализирован")
+            }
+            
+            val available = ollamaClient!!.isAvailable()
+            
+            if (!available) {
+                val text = buildString {
+                    append("❌ Ollama недоступна\n\n")
+                    append("URL: $ollamaUrl\n\n")
+                    append("Убедитесь что:\n")
+                    append("1. Ollama запущена на компьютере\n")
+                    append("2. URL правильный\n")
+                    append("3. Устройство подключено к той же сети\n\n")
+                    append("Используйте /ollama config для настройки URL")
+                }
+                
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to text)
+                    )
+                )
+            }
+            
+            // Получаем список моделей
+            val modelsResult = ollamaClient!!.listModels()
+            
+            val text = buildString {
+                append("✅ Ollama доступна\n")
+                append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                append("URL: $ollamaUrl\n")
+                append("Статус: Подключено\n\n")
+                
+                if (modelsResult.isSuccess) {
+                    val models = modelsResult.getOrNull()!!
+                    append("📦 Установленные модели (${models.size}):\n\n")
+                    
+                    models.forEach { model ->
+                        append("• ${model.name}\n")
+                        val sizeMB = model.size / (1024 * 1024)
+                        append("  Размер: $sizeMB MB\n")
+                        append("  Обновлена: ${model.modifiedAt}\n\n")
+                    }
+                } else {
+                    append("⚠️ Не удалось получить список моделей\n")
+                }
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun ollamaConfigure(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val url = arguments?.get("url")?.asString
+            
+            if (url.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать URL")
+            }
+            
+            // Обновляем URL
+            ollamaUrl = url.trimEnd('/')
+            ollamaClient?.setBaseUrl(ollamaUrl)
+            
+            // Сохраняем URL в настройках
+            saveOllamaUrl(ollamaUrl)
+            
+            // Проверяем доступность
+            val available = ollamaClient?.isAvailable() ?: false
+            
+            val text = if (available) {
+                ollamaEnabled = true
+                // Инициализируем RAG сервис (используем существующий documentIndexService)
+                ollamaRAGService = com.test.chatbot.rag.OllamaRAGService(documentIndexService, ollamaClient!!)
+                Log.i(TAG, "✅ OllamaRAGService инициализирован")
+                "✅ Ollama настроена успешно\n\nURL: $ollamaUrl\nСтатус: Подключено\n\n🧠 RAG активирован"
+            } else {
+                ollamaEnabled = false
+                ollamaRAGService = null
+                "⚠️ Ollama настроена, но недоступна\n\nURL: $ollamaUrl\n\nУбедитесь что Ollama запущена"
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun ragQuery(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val question = arguments?.get("question")?.asString
+            val topK = arguments?.get("top_k")?.asInt ?: 10 // Увеличено с 3 до 10 для лучшего поиска
+            
+            if (question.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать вопрос")
+            }
+            
+            if (ollamaRAGService == null) {
+                return createErrorMessage(
+                    "RAG недоступен. Ollama не подключена.\n\n" +
+                    "Используйте /ollama config для настройки"
+                )
+            }
+            
+            // Выполняем RAG запрос
+            val result = ollamaRAGService!!.queryWithRAG(question, topK)
+            
+            if (result.isSuccess) {
+                val ragResponse = result.getOrNull()!!
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to ragResponse.toFormattedString())
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка RAG: ${result.exceptionOrNull()?.message}")
+            }
         } catch (e: Exception) {
             createErrorResponse(e)
         }

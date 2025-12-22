@@ -1,0 +1,166 @@
+Android разработка
+
+Android - операционная система на основе Linux для мобильных устройств, разработанная Google. Самая популярная мобильная ОС в мире с более чем 70% рынка.
+
+Android архитектура
+Android состоит из нескольких слоёв:
+1. Linux Kernel - ядро, управление памятью и процессами
+2. HAL (Hardware Abstraction Layer) - аппаратная абстракция
+3. Android Runtime (ART) - выполнение приложений
+4. Native C/C++ Libraries - системные библиотеки
+5. Java API Framework - фреймворки для разработки
+6. System Apps - системные приложения
+
+Компоненты Android приложения
+Основные строительные блоки:
+
+Activity
+Экран с пользовательским интерфейсом. Каждый экран приложения - это Activity. Имеет жизненный цикл: onCreate, onStart, onResume, onPause, onStop, onDestroy.
+
+Fragment
+Модульная часть UI, может быть переиспользована. Несколько фрагментов могут быть в одной Activity. Имеет собственный жизненный цикл.
+
+Service
+Компонент для фоновых операций без UI. Может работать даже когда приложение свёрнуто. Используется для музыки, загрузок, синхронизации.
+
+Broadcast Receiver
+Получает системные и пользовательские события (зарядка, SMS, сеть). Позволяет приложению реагировать на события системы.
+
+Content Provider
+Управляет общим доступом к данным приложения. Позволяет другим приложениям получать данные. Используется для контактов, медиафайлов.
+
+Jetpack Compose
+Современный декларативный UI фреймворк для Android. Написан на Kotlin. Заменяет XML layouts.
+
+Преимущества Compose:
+- Меньше кода
+- Интуитивный API
+- Поддержка Material Design 3
+- Предпросмотр в реальном времени
+- Полная совместимость с существующими View
+
+Composable функции
+Функции помеченные @Composable создают UI элементы:
+
+@Composable
+fun Greeting(name: String) {
+    Text(text = "Hello $name!")
+}
+
+State управление
+State - данные которые могут изменяться. Remember сохраняет состояние при рекомпозиции:
+
+var count by remember { mutableStateOf(0) }
+
+ViewModel
+Хранит и управляет UI-данными с учётом жизненного цикла. Переживает пересоздание Activity при повороте экрана.
+
+LiveData и StateFlow
+Наблюдаемые типы данных для реактивного программирования:
+- LiveData - lifecycle-aware observable
+- StateFlow - Kotlin Flow для состояния
+
+Архитектурные паттерны
+MVVM (Model-View-ViewModel)
+Рекомендуемый паттерн Google. Разделяет логику от UI:
+- Model - данные и бизнес-логика
+- View - UI (Activity/Fragment/Compose)
+- ViewModel - связь между Model и View
+
+Clean Architecture
+Разделение на слои:
+- Presentation - UI и ViewModel
+- Domain - бизнес-логика, Use Cases
+- Data - Repository, API, Database
+
+Хранение данных
+SharedPreferences
+Простое хранение ключ-значение для настроек.
+
+Room Database
+SQLite ORM от Google. Compile-time проверка SQL запросов. Интеграция с LiveData и Flow.
+
+DataStore
+Современная замена SharedPreferences. Поддерживает корутины. Два типа: Preferences и Proto DataStore.
+
+Сетевые запросы
+Retrofit
+Популярная библиотека для REST API. Автоматическая сериализация JSON через Gson или Moshi.
+
+OkHttp
+HTTP клиент, используется Retrofit. Поддерживает interceptors для логирования и модификации запросов.
+
+Корутины
+Легковесные потоки для асинхронного программирования в Kotlin. Более простая альтернатива Threads и Callbacks.
+
+Области корутин:
+- GlobalScope - на всё приложение
+- lifecycleScope - привязан к Activity/Fragment
+- viewModelScope - привязан к ViewModel
+
+Навигация
+Navigation Component
+Библиотека для навигации между экранами. Визуальный редактор навигационного графа. Поддержка deep links и аргументов.
+
+Dependency Injection
+Hilt
+Официальная DI библиотека для Android на основе Dagger. Упрощает внедрение зависимостей.
+
+Koin
+Легковесная DI библиотека на чистом Kotlin. Более простая чем Dagger/Hilt.
+
+Тестирование
+Unit тесты
+JUnit для тестирования логики. MockK для моков в Kotlin.
+
+UI тесты
+Espresso для тестирования Views. Compose Testing для Jetpack Compose.
+
+Material Design
+Система дизайна от Google:
+- Material Design 2 - текущий стандарт
+- Material Design 3 - новая версия с динамическими цветами
+
+Компоненты: Button, Card, Dialog, BottomSheet, NavigationBar, TopAppBar, Snackbar.
+
+Permissions
+Разрешения для доступа к ресурсам:
+- Normal - предоставляются автоматически
+- Dangerous - требуют запроса у пользователя
+- Special - требуют настройки
+
+Runtime permissions с Android 6.0+
+
+WorkManager
+Планирование отложенных и периодических задач. Гарантирует выполнение даже после перезагрузки. Учитывает состояние устройства.
+
+Performance
+Профилирование с Android Studio Profiler:
+- CPU Profiler
+- Memory Profiler
+- Network Profiler
+- Energy Profiler
+
+R8/ProGuard
+Оптимизация и обфускация кода для релиза.
+
+Android версии
+Каждая версия Android названа в честь десерта:
+- Oreo (8.0)
+- Pie (9.0)
+- Q (10)
+- R (11)
+- S (12) - Material You
+- T (13) - улучшенная приватность
+- U (14) - новейшая версия
+
+API Levels
+Минимальный API level определяет поддерживаемые устройства. Рекомендуется минSdk 24 (Android 7.0) для охвата 90%+ устройств.
+
+Google Play
+Публикация приложений:
+- App Bundle (AAB) - оптимизированный формат
+- Signing - подпись приложения
+- Testing tracks - internal, alpha, beta, production
+- Store listing - описание, скриншоты, видео
+

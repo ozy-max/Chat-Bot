@@ -15,6 +15,7 @@ class ChatViewModelFactory(
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
             return ChatViewModel(
+                context = context,
                 repository = ChatRepository(),
                 preferencesRepository = PreferencesRepository(context),
                 memoryRepository = MemoryRepository(context)

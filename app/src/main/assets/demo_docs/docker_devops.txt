@@ -1,0 +1,359 @@
+Docker и DevOps
+
+DevOps - это культура, практики и инструменты для ускорения разработки и доставки программного обеспечения. Объединяет Development (разработку) и Operations (эксплуатацию).
+
+Docker
+
+Docker - платформа для контейнеризации приложений. Позволяет упаковать приложение и его зависимости в изолированный контейнер.
+
+Преимущества Docker:
+- Консистентность окружения - одинаково работает везде
+- Изоляция - приложения не конфликтуют
+- Портативность - легко переносить между машинами
+- Эффективность - легковеснее виртуальных машин
+- Быстрый старт - контейнеры запускаются за секунды
+
+Docker vs Virtual Machines
+VM включает полную ОС, Docker использует ядро хоста. Контейнеры легче и быстрее.
+
+Основные концепции Docker
+
+Image (Образ)
+Шаблон для создания контейнера. Содержит ОС, приложение и зависимости. Неизменяемый.
+
+Создание из Dockerfile:
+FROM node:18
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+EXPOSE 3000
+CMD ["npm", "start"]
+
+Container (Контейнер)
+Запущенный экземпляр образа. Изолированный процесс с собственной файловой системой.
+
+Создание контейнера:
+docker run -d -p 3000:3000 --name myapp myapp:latest
+
+Dockerfile
+Текстовый файл с инструкциями для создания образа.
+
+Основные инструкции:
+- FROM - базовый образ
+- RUN - выполнить команду
+- COPY/ADD - скопировать файлы
+- WORKDIR - рабочая директория
+- ENV - переменные окружения
+- EXPOSE - открыть порт
+- CMD - команда по умолчанию
+- ENTRYPOINT - точка входа
+
+Docker Hub
+Публичный реестр Docker образов. Миллионы готовых образов.
+
+Популярные образы:
+- ubuntu, alpine - ОС
+- node, python, golang - языки
+- nginx, apache - веб-серверы
+- postgres, mysql, mongodb - БД
+- redis - кеш
+
+Docker Compose
+Инструмент для определения многоконтейнерных приложений. Описывается в docker-compose.yml.
+
+Пример:
+version: '3'
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_PASSWORD: secret
+
+Команды:
+- docker-compose up - запустить
+- docker-compose down - остановить
+- docker-compose logs - логи
+
+Docker Networks
+Сети для коммуникации между контейнерами:
+- bridge - по умолчанию
+- host - использует сеть хоста
+- overlay - для Swarm
+- none - без сети
+
+Docker Volumes
+Постоянное хранилище данных. Переживает удаление контейнера.
+
+Типы:
+- Named volumes - управляемые Docker
+- Bind mounts - монтирование директорий хоста
+- tmpfs - временное в памяти
+
+Multi-stage builds
+Оптимизация размера образа. Использование нескольких FROM.
+
+FROM node:18 AS builder
+WORKDIR /app
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+CI/CD (Continuous Integration/Continuous Deployment)
+
+Continuous Integration
+Автоматическая сборка и тестирование при каждом коммите.
+
+Практики:
+- Частые коммиты
+- Автоматические тесты
+- Быстрая обратная связь
+- Фиксация проблем сразу
+
+Continuous Deployment
+Автоматическая доставка кода в продакшен после прохождения тестов.
+
+CD Pipeline:
+1. Commit - коммит кода
+2. Build - сборка
+3. Test - тестирование
+4. Deploy to staging - развёртывание на staging
+5. Integration tests - интеграционные тесты
+6. Deploy to production - в продакшен
+
+CI/CD инструменты
+
+GitHub Actions
+CI/CD встроенный в GitHub. Workflows в .github/workflows/
+
+Пример:
+name: CI
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - run: npm install
+      - run: npm test
+
+GitLab CI
+CI/CD в GitLab. Конфигурация в .gitlab-ci.yml
+
+Jenkins
+Open-source automation server. Плагины для всего.
+
+CircleCI
+Cloud-based CI/CD сервис.
+
+Travis CI
+CI/CD для open-source проектов.
+
+Infrastructure as Code (IaC)
+
+Terraform
+Декларативное описание инфраструктуры. Работает с AWS, Azure, GCP.
+
+Пример:
+resource "aws_instance" "web" {
+  ami           = "ami-12345678"
+  instance_type = "t2.micro"
+}
+
+Команды:
+- terraform init - инициализация
+- terraform plan - план изменений
+- terraform apply - применить
+- terraform destroy - удалить
+
+Ansible
+Управление конфигурацией серверов. Описание в YAML playbooks.
+
+CloudFormation
+IaC для AWS. JSON/YAML шаблоны.
+
+Kubernetes (K8s)
+
+Kubernetes - оркестратор контейнеров. Автоматизирует развёртывание, масштабирование и управление контейнерами.
+
+Основные объекты:
+
+Pod
+Минимальная единица развёртывания. Один или несколько контейнеров.
+
+Deployment
+Декларативное управление Pods. Обеспечивает желаемое состояние.
+
+Service
+Сетевой доступ к Pods. Load balancing между репликами.
+
+Типы сервисов:
+- ClusterIP - внутри кластера
+- NodePort - на порту ноды
+- LoadBalancer - внешний балансировщик
+- Ingress - HTTP роутинг
+
+ConfigMap и Secret
+ConfigMap - конфигурация
+Secret - чувствительные данные (пароли, токены)
+
+Volume
+Хранилище для Pods:
+- emptyDir - временное
+- hostPath - на ноде
+- persistentVolume - постоянное
+
+Namespace
+Логическое разделение кластера. Изоляция ресурсов.
+
+Kubectl
+CLI для управления Kubernetes.
+
+Команды:
+- kubectl get pods - список подов
+- kubectl describe pod - детали пода
+- kubectl logs - логи
+- kubectl apply -f - применить манифест
+- kubectl delete - удалить
+- kubectl exec - выполнить команду в поде
+
+Helm
+Пакетный менеджер для Kubernetes. Charts - пакеты приложений.
+
+Мониторинг и логирование
+
+Prometheus
+Система мониторинга метрик. Pull-based модель.
+
+Метрики:
+- Counter - счётчик
+- Gauge - текущее значение
+- Histogram - распределение
+- Summary - квантили
+
+Grafana
+Визуализация метрик. Дашборды для Prometheus.
+
+ELK Stack
+Elasticsearch + Logstash + Kibana. Централизованное логирование.
+
+Elasticsearch - поиск и анализ логов
+Logstash - сбор и обработка
+Kibana - визуализация
+
+Fluentd
+Альтернатива Logstash. Унифицированный сбор логов.
+
+Jaeger
+Distributed tracing. Отслеживание запросов в микросервисах.
+
+Best practices DevOps
+
+Version Control
+Git для всего:
+- Код
+- Конфигурация
+- Инфраструктура
+- Документация
+
+Automated Testing
+Пирамида тестирования:
+- Unit tests (много)
+- Integration tests (средне)
+- E2E tests (мало)
+
+Code Review
+Peer review всех изменений. Pull/Merge requests.
+
+Feature Flags
+Включение/выключение функций без деплоя. Canary releases.
+
+Blue-Green Deployment
+Две идентичные среды. Переключение трафика между ними.
+
+Canary Deployment
+Постепенный раскат новой версии. Тестирование на части трафика.
+
+Rolling Update
+Постепенная замена старых версий новыми.
+
+Rollback Strategy
+План отката при проблемах. Быстрый возврат к предыдущей версии.
+
+Immutable Infrastructure
+Не изменяем серверы, пересоздаём. Контейнеры и IaC.
+
+Observability
+Три столпа:
+- Metrics - метрики
+- Logs - логи
+- Traces - трассировки
+
+Security в DevOps (DevSecOps)
+Безопасность на каждом этапе:
+- SAST - статический анализ
+- DAST - динамическое тестирование
+- Dependency scanning - проверка зависимостей
+- Container scanning - сканирование образов
+- Secret management - управление секретами
+
+Cloud Providers
+
+AWS (Amazon Web Services)
+Крупнейший облачный провайдер.
+
+Ключевые сервисы:
+- EC2 - виртуальные машины
+- S3 - хранилище объектов
+- RDS - управляемые БД
+- Lambda - serverless функции
+- ECS/EKS - контейнеры
+
+Google Cloud Platform (GCP)
+- Compute Engine - VM
+- Cloud Storage
+- Cloud SQL
+- Cloud Run - контейнеры
+- GKE - Kubernetes
+
+Microsoft Azure
+- Virtual Machines
+- Blob Storage
+- Azure SQL
+- Azure Functions
+- AKS - Kubernetes
+
+GitOps
+Управление инфраструктурой через Git. Декларативный подход.
+
+Инструменты:
+- ArgoCD - CD для Kubernetes
+- Flux - GitOps оператор
+
+Site Reliability Engineering (SRE)
+Подход Google к эксплуатации. Применение разработки к операциям.
+
+Концепции:
+- SLI (Service Level Indicator) - метрики
+- SLO (Service Level Objective) - цели
+- SLA (Service Level Agreement) - соглашения
+- Error budgets - допустимая ошибка
+- Postmortems - разбор инцидентов
+
+Chaos Engineering
+Намеренное внесение сбоев для тестирования устойчивости.
+
+Инструменты:
+- Chaos Monkey (Netflix)
+- Gremlin
+- Litmus
+
+Platform Engineering
+Создание внутренних платформ для разработчиков. Абстракция сложности инфраструктуры.
+

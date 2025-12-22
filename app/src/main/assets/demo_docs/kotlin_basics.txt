@@ -1,0 +1,100 @@
+Основы языка Kotlin
+
+Kotlin - современный язык программирования, разработанный компанией JetBrains. С 2017 года является официальным языком для разработки Android приложений.
+
+Основные особенности
+1. Null-безопасность - защита от NullPointerException на уровне компилятора
+2. Краткость - меньше boilerplate кода чем в Java
+3. Интероперабельность - полная совместимость с Java
+4. Корутины - простая работа с асинхронным кодом
+5. Функциональное программирование - поддержка lambda, map, filter
+
+Переменные
+- val - неизменяемая переменная (аналог final в Java)
+- var - изменяемая переменная
+
+Пример:
+val name = "Kotlin" // нельзя изменить
+var age = 5 // можно изменить
+
+Null-безопасность
+В Kotlin типы делятся на nullable (могут быть null) и non-nullable.
+
+String - не может быть null
+String? - может быть null
+
+Безопасный вызов: name?.length
+Elvis оператор: name?.length ?: 0
+Non-null assertion: name!!.length
+
+Функции
+Функции объявляются с помощью ключевого слова fun.
+
+fun sum(a: Int, b: Int): Int {
+    return a + b
+}
+
+Однострочные функции:
+fun sum(a: Int, b: Int) = a + b
+
+Классы и объекты
+class Person(val name: String, var age: Int)
+
+Data class - автоматически генерирует equals, hashCode, toString:
+data class User(val id: Int, val name: String)
+
+Корутины
+Корутины - это легковесные потоки для асинхронного программирования.
+
+suspend fun loadData() {
+    delay(1000)
+    return data
+}
+
+launch {
+    val result = loadData()
+}
+
+Лямбда-выражения
+val sum = { a: Int, b: Int -> a + b }
+
+Работа с коллекциями:
+list.filter { it > 5 }
+    .map { it * 2 }
+    .forEach { println(it) }
+
+Extension функции
+Можно добавлять новые функции к существующим классам:
+
+fun String.isPalindrome(): Boolean {
+    return this == this.reversed()
+}
+
+Sealed классы
+Используются для ограниченных иерархий классов:
+
+sealed class Result {
+    data class Success(val data: String) : Result()
+    data class Error(val message: String) : Result()
+}
+
+Companion объекты
+Аналог static в Java:
+
+class MyClass {
+    companion object {
+        const val CONSTANT = "value"
+        fun create() = MyClass()
+    }
+}
+
+Популярные библиотеки для Kotlin
+- Ktor - фреймворк для веб-приложений
+- Exposed - SQL библиотека
+- kotlinx.coroutines - корутины
+- kotlinx.serialization - сериализация JSON
+- Arrow - функциональное программирование
+
+Android разработка
+Kotlin официально рекомендуется Google для Android. Jetpack Compose - современный UI фреймворк написан на Kotlin.
+

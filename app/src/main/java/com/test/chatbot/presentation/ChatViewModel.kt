@@ -1,5 +1,6 @@
 package com.test.chatbot.presentation
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -8,6 +9,7 @@ import com.test.chatbot.data.memory.MemoryRepository
 import com.test.chatbot.data.memory.MemoryState
 import com.test.chatbot.models.*
 import com.test.chatbot.repository.ChatRepository
+import com.test.chatbot.utils.DemoDocsInitializer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +20,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 
 class ChatViewModel(
+    private val context: Context,
     private val repository: ChatRepository = ChatRepository(),
     private val preferencesRepository: PreferencesRepository? = null,
     private val memoryRepository: MemoryRepository? = null
@@ -1187,6 +1190,42 @@ class ChatViewModel(
                         handleSshInfoCommand()
                     }
                     
+                    // RAG (Vector Search) команды
+                    "index" -> {
+                        val subcommand = parts.getOrNull(1) ?: ""
+                        handleIndexCommand(subcommand, parts.drop(2))
+                    }
+                    
+                    "search", "find" -> {
+                        val query = parts.drop(1).joinToString(" ").trim()
+                        if (query.isBlank()) {
+                            addBotMessage("❌ Укажите запрос: /search <ваш запрос>")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handleSemanticSearchCommand(query)
+                    }
+                    
+                    "docs" -> {
+                        handleListDocsCommand()
+                    }
+                    
+                    // Ollama команды
+                    "ollama" -> {
+                        val subcommand = parts.getOrNull(1) ?: "status"
+                        handleOllamaCommand(subcommand, parts.drop(2))
+                    }
+                    
+                    "ask", "rag" -> {
+                        val question = parts.drop(1).joinToString(" ").trim()
+                        if (question.isBlank()) {
+                            addBotMessage("❌ Укажите вопрос: /ask <ваш вопрос>")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handleRAGQueryCommand(question)
+                    }
+                    
                     "help" -> {
                         addBotMessage(getHelpMessage())
                         _uiState.update { it.copy(isLoading = false) }
@@ -1701,6 +1740,22 @@ class ChatViewModel(
             /wifi, /remote - ADB over WiFi
             /ssh - SSH через Termux
             
+            🧠 ВЕКТОРНЫЙ ПОИСК (RAG):
+            /index demo - проиндексировать демо-документы
+            /index stats - статистика индекса
+            /index list - список документов
+            /index file <путь> - индексировать файл
+            /index clear - очистить индекс
+            /index reset - полный сброс БД
+            /search <запрос> - семантический поиск
+            /docs - список проиндексированных документов
+            
+            🦙 OLLAMA (AI):
+            /ollama status - проверить Ollama
+            /ollama config <url> - настроить URL
+            /ask <вопрос> - RAG с генерацией ответа
+            /rag <вопрос> - альтернатива /ask
+            
             /help - показать эту справку
         """.trimIndent()
     }
@@ -1768,6 +1823,224 @@ class ChatViewModel(
             _uiState.update { it.copy(isLoading = false) }
         }?.onFailure {
             addBotMessage("❌ Ошибка запуска приложения: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    // ==================== RAG (Vector Search) Commands ====================
+    
+    private suspend fun handleIndexCommand(subcommand: String, args: List<String>) {
+        when (subcommand) {
+            "stats" -> {
+                val result = mcpClient?.callTool("index_stats", emptyMap())
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Статистика недоступна")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "list" -> {
+                val result = mcpClient?.callTool("list_indexed_docs", emptyMap())
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Нет документов")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "file" -> {
+                val filePath = args.joinToString(" ").trim()
+                if (filePath.isBlank()) {
+                    addBotMessage("❌ Укажите путь к файлу: /index file <путь>")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val result = mcpClient?.callTool("index_file", mapOf("file_path" to filePath))
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Файл проиндексирован")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "demo" -> {
+                handleIndexDemoDocsCommand()
+            }
+            "clear" -> {
+                val result = mcpClient?.callTool("clear_index", emptyMap())
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Индекс очищен")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "reset" -> {
+                val result = mcpClient?.callTool("reset_database", emptyMap())
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "База данных сброшена")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            else -> {
+                addBotMessage("❌ Неизвестная подкоманда.\n\n" +
+                    "Доступные команды:\n" +
+                    "/index demo - проиндексировать демо-документы\n" +
+                    "/index stats - статистика индекса\n" +
+                    "/index list - список документов\n" +
+                    "/index file <путь> - индексировать файл\n" +
+                    "/index clear - очистить индекс\n" +
+                    "/index reset - полный сброс БД (если поиск не работает)")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    private suspend fun handleSemanticSearchCommand(query: String) {
+        val result = mcpClient?.callTool("semantic_search", mapOf("query" to query, "top_k" to 5))
+        
+        result?.onSuccess { toolResult ->
+            val searchText = toolResult.content.firstOrNull()?.text ?: "Ничего не найдено"
+            addBotMessage(searchText)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка поиска: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleListDocsCommand() {
+        val result = mcpClient?.callTool("list_indexed_docs", emptyMap())
+        
+        result?.onSuccess { toolResult ->
+            val docsText = toolResult.content.firstOrNull()?.text ?: "Нет документов"
+            addBotMessage(docsText)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения списка: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleIndexDemoDocsCommand() {
+        // Сначала проверяем доступность Ollama
+        val ollamaCheck = mcpClient?.callTool("ollama_status", emptyMap())
+        val ollamaAvailable = ollamaCheck?.isSuccess == true
+        
+        if (!ollamaAvailable) {
+            addBotMessage(
+                "⚠️ ВНИМАНИЕ: Ollama недоступна!\n\n" +
+                "Для качественного поиска необходимо настроить Ollama:\n\n" +
+                "1. Выполните: /ollama config http://10.0.2.2:11434\n" +
+                "2. Убедитесь что Ollama запущена на компьютере\n" +
+                "3. Проверьте: /ollama status\n\n" +
+                "❌ Индексация отменена."
+            )
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        addBotMessage("📚 Индексация демо-документов с Ollama...\n\n" +
+                "Это может занять 30-60 секунд.")
+        
+        val demoDocsInitializer = DemoDocsInitializer(context)
+        val demoFiles = demoDocsInitializer.getDemoDocsList()
+        
+        if (demoFiles.isEmpty()) {
+            addBotMessage("❌ Демо-документы не найдены")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        var successCount = 0
+        var failCount = 0
+        val results = StringBuilder()
+        results.append("📄 Индексация ${demoFiles.size} документов:\n\n")
+        
+        for ((index, fileName) in demoFiles.withIndex()) {
+            val result = mcpClient?.callTool("index_file", mapOf("file_path" to fileName))
+            
+            if (result?.isSuccess == true) {
+                successCount++
+                results.append("✅ ${index + 1}. $fileName\n")
+            } else {
+                failCount++
+                results.append("❌ ${index + 1}. $fileName\n")
+            }
+        }
+        
+        results.append("\n━━━━━━━━━━━━━━━━━━━━\n")
+        results.append("✅ Успешно: $successCount\n")
+        if (failCount > 0) {
+            results.append("❌ Ошибок: $failCount\n")
+        }
+        results.append("\n💡 Теперь можете использовать:\n")
+        results.append("/search <запрос> - поиск по документам\n")
+        results.append("/ask <вопрос> - RAG с генерацией ответа")
+        
+        addBotMessage(results.toString())
+        _uiState.update { it.copy(isLoading = false) }
+    }
+    
+    // ==================== Ollama Commands ====================
+    
+    private suspend fun handleOllamaCommand(subcommand: String, args: List<String>) {
+        when (subcommand) {
+            "status" -> {
+                val result = mcpClient?.callTool("ollama_status", emptyMap())
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Статус недоступен")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "config", "configure" -> {
+                val url = args.joinToString(" ").trim()
+                if (url.isBlank()) {
+                    addBotMessage("❌ Укажите URL: /ollama config http://192.168.1.100:11434")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val result = mcpClient?.callTool("ollama_configure", mapOf("url" to url))
+                result?.onSuccess { toolResult ->
+                    addBotMessage(toolResult.content.firstOrNull()?.text ?: "Настроено")
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            else -> {
+                addBotMessage("❌ Неизвестная подкоманда.\n\n" +
+                    "Доступные команды:\n" +
+                    "/ollama status - проверить статус\n" +
+                    "/ollama config <url> - настроить URL")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    private suspend fun handleRAGQueryCommand(question: String) {
+        val result = mcpClient?.callTool("rag_query", mapOf("question" to question, "top_k" to 10))
+        
+        result?.onSuccess { toolResult ->
+            val ragAnswer = toolResult.content.firstOrNull()?.text ?: "Нет ответа"
+            addBotMessage(ragAnswer)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка RAG: ${it.message}\n\nПроверьте что Ollama доступна (/ollama status)")
             _uiState.update { it.copy(isLoading = false) }
         }
     }

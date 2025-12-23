@@ -823,7 +823,29 @@ class McpServer(
                             ),
                             "top_k" to mapOf(
                                 "type" to "number",
-                                "description" to "Количество релевантных документов (по умолчанию 3)"
+                                "description" to "Количество релевантных документов (по умолчанию 10)"
+                            )
+                        ),
+                        "required" to listOf("question")
+                    )
+                ),
+                mapOf(
+                    "name" to "compare_rag",
+                    "description" to "Сравнить ответы с RAG и без RAG для анализа эффективности",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "question" to mapOf(
+                                "type" to "string",
+                                "description" to "Вопрос для сравнения"
+                            ),
+                            "top_k" to mapOf(
+                                "type" to "number",
+                                "description" to "Количество релевантных документов (по умолчанию 10)"
+                            ),
+                            "model" to mapOf(
+                                "type" to "string",
+                                "description" to "Модель Ollama (по умолчанию llama3)"
                             )
                         ),
                         "required" to listOf("question")
@@ -891,6 +913,7 @@ class McpServer(
             "ollama_status" -> runBlocking { ollamaStatus() }
             "ollama_configure" -> runBlocking { ollamaConfigure(arguments) }
             "rag_query" -> runBlocking { ragQuery(arguments) }
+            "compare_rag" -> runBlocking { compareRAG(arguments) }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -1921,6 +1944,41 @@ class McpServer(
                 )
             } else {
                 createErrorMessage("Ошибка RAG: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun compareRAG(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val question = arguments?.get("question")?.asString
+            val topK = arguments?.get("top_k")?.asInt ?: 10
+            val model = arguments?.get("model")?.asString ?: "llama3"
+            
+            if (question.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать вопрос")
+            }
+            
+            if (ollamaRAGService == null) {
+                return createErrorMessage(
+                    "RAG недоступен. Ollama не подключена.\n\n" +
+                    "Используйте /ollama config для настройки"
+                )
+            }
+            
+            // Выполняем сравнение
+            val result = ollamaRAGService!!.compareRAG(question, model, topK)
+            
+            if (result.isSuccess) {
+                val comparison = result.getOrNull()!!
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to comparison.toFormattedString())
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка сравнения: ${result.exceptionOrNull()?.message}")
             }
         } catch (e: Exception) {
             createErrorResponse(e)

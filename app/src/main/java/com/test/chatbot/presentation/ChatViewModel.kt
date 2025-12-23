@@ -1226,6 +1226,16 @@ class ChatViewModel(
                         handleRAGQueryCommand(question)
                     }
                     
+                    "compare" -> {
+                        val question = parts.drop(1).joinToString(" ").trim()
+                        if (question.isBlank()) {
+                            addBotMessage("❌ Укажите вопрос: /compare <ваш вопрос>")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handleCompareRAGCommand(question)
+                    }
+                    
                     "help" -> {
                         addBotMessage(getHelpMessage())
                         _uiState.update { it.copy(isLoading = false) }
@@ -1754,6 +1764,7 @@ class ChatViewModel(
             /ollama status - проверить Ollama
             /ollama config <url> - настроить URL
             /ask <вопрос> - RAG с генерацией ответа
+            /compare <вопрос> - сравнить RAG vs No-RAG
             /rag <вопрос> - альтернатива /ask
             
             /help - показать эту справку
@@ -2041,6 +2052,25 @@ class ChatViewModel(
             _uiState.update { it.copy(isLoading = false) }
         }?.onFailure {
             addBotMessage("❌ Ошибка RAG: ${it.message}\n\nПроверьте что Ollama доступна (/ollama status)")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleCompareRAGCommand(question: String) {
+        addBotMessage("🔬 Сравнение RAG vs No-RAG...\n\nЭто может занять 30-60 секунд.")
+        
+        val result = mcpClient?.callTool("compare_rag", mapOf(
+            "question" to question,
+            "top_k" to 10,
+            "model" to "llama3"
+        ))
+        
+        result?.onSuccess { toolResult ->
+            val comparison = toolResult.content.firstOrNull()?.text ?: "Нет результата"
+            addBotMessage(comparison)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка сравнения: ${it.message}\n\nПроверьте что Ollama доступна (/ollama status)")
             _uiState.update { it.copy(isLoading = false) }
         }
     }

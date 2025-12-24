@@ -30,3 +30,4 @@
 Основные компании
 IBM, Google, Microsoft, Intel, IonQ, Rigetti Computing работают над созданием квантовых компьютеров.
 
+

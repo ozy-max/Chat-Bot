@@ -266,3 +266,4 @@ class AdbService(private val context: Context) {
     fun getScreenshotsDirectory(): String = screenshotsDir.absolutePath
 }
 
+

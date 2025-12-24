@@ -242,8 +242,13 @@ class DocumentIndexService(
             }
             val queryEmbedding = queryEmbeddingResult.getOrNull()!!
             
-            // Ищем похожие векторы
-            val searchResult = vectorStorage.searchSimilar(queryEmbedding, topK)
+            // Ищем похожие векторы с keyword boosting (hybrid search)
+            val searchResult = vectorStorage.searchSimilarWithKeywordBoost(
+                query = query,
+                queryEmbedding = queryEmbedding,
+                topK = topK,
+                keywordBoost = 0.3f  // +30% к similarity при keyword match (было 15%)
+            )
             
             if (searchResult.isSuccess) {
                 val results = searchResult.getOrNull()!!

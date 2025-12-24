@@ -1236,6 +1236,16 @@ class ChatViewModel(
                         handleCompareRAGCommand(question)
                     }
                     
+                    "filter" -> {
+                        val question = parts.drop(1).joinToString(" ").trim()
+                        if (question.isBlank()) {
+                            addBotMessage("❌ Укажите вопрос: /filter <ваш вопрос>")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handleCompareFilteringCommand(question)
+                    }
+                    
                     "help" -> {
                         addBotMessage(getHelpMessage())
                         _uiState.update { it.copy(isLoading = false) }
@@ -1765,6 +1775,7 @@ class ChatViewModel(
             /ollama config <url> - настроить URL
             /ask <вопрос> - RAG с генерацией ответа
             /compare <вопрос> - сравнить RAG vs No-RAG
+            /filter <вопрос> - сравнить методы фильтрации
             /rag <вопрос> - альтернатива /ask
             
             /help - показать эту справку
@@ -2071,6 +2082,29 @@ class ChatViewModel(
             _uiState.update { it.copy(isLoading = false) }
         }?.onFailure {
             addBotMessage("❌ Ошибка сравнения: ${it.message}\n\nПроверьте что Ollama доступна (/ollama status)")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleCompareFilteringCommand(question: String) {
+        addBotMessage("🔬 Сравнение методов фильтрации...\n\n" +
+            "Тестирую:\n" +
+            "1️⃣ Без фильтра (15 документов, hybrid search)\n" +
+            "2️⃣ С threshold фильтром (threshold=0.4, topK=12)\n" +
+            "3️⃣ С LLM reranker (threshold=0.35, maxRerank=20, topK=15)\n\n" +
+            "⏱️ Это может занять 60-90 секунд.")
+        
+        val result = mcpClient?.callTool("compare_filtering", mapOf(
+            "question" to question,
+            "model" to "llama3"
+        ))
+        
+        result?.onSuccess { toolResult ->
+            val comparison = toolResult.content.firstOrNull()?.text ?: "Нет результата"
+            addBotMessage(comparison)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка сравнения фильтрации: ${it.message}\n\nПроверьте что Ollama доступна (/ollama status)")
             _uiState.update { it.copy(isLoading = false) }
         }
     }

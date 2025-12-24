@@ -257,25 +257,296 @@ class VectorStorage(context: Context) : SQLiteOpenHelper(
             
             Log.i(TAG, "✅ Найдено ${topResults.size} похожих результатов из ${results.size} всего")
             
-            // Логируем ВСЕ результаты чтобы найти kotlin_basics
-            Log.i(TAG, "📊 ВСЕ результаты поиска:")
-            sortedResults.forEachIndexed { index, result ->
-                Log.i(TAG, "  ${index + 1}. ${result.docName} - similarity: ${(result.similarity * 100).toInt()}% (${result.similarity})")
-            }
-            
-            // Проверяем есть ли kotlin_basics
-            val kotlinBasicsResult = sortedResults.find { it.docName.contains("kotlin") }
-            if (kotlinBasicsResult != null) {
-                Log.w(TAG, "⚠️ kotlin_basics найден на позиции ${sortedResults.indexOf(kotlinBasicsResult) + 1} с similarity ${(kotlinBasicsResult.similarity * 100).toInt()}%")
-            } else {
-                Log.e(TAG, "❌ kotlin_basics НЕ НАЙДЕН в результатах!")
-            }
-            
             Result.success(topResults)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Ошибка поиска: ${e.message}", e)
             Result.failure(e)
         }
+    }
+    
+    /**
+     * Поиск с keyword boosting - улучшает ranking если название документа содержит ключевые слова
+     */
+    suspend fun searchSimilarWithKeywordBoost(
+        query: String,
+        queryEmbedding: FloatArray,
+        topK: Int = 5,
+        keywordBoost: Float = 0.3f  // +30% к similarity если keyword match (было 15%)
+    ): Result<List<SearchResult>> = withContext(Dispatchers.IO) {
+        try {
+            // 1. Получаем ВСЕ результаты для гарантированного покрытия
+            val searchResult = searchSimilar(queryEmbedding, 100)  // Берем все документы
+            
+            if (searchResult.isFailure) {
+                return@withContext searchResult
+            }
+            
+            val results = searchResult.getOrNull()!!
+            
+            // 2. Извлекаем ключевые слова из запроса
+            val keywords = extractKeywords(query)
+            
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.i(TAG, "🔍 HYBRID SEARCH")
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.i(TAG, "📝 Запрос: \"$query\"")
+            Log.i(TAG, "🔑 Ключевые слова (${keywords.size}): ${keywords.joinToString(", ")}")
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.i(TAG, "📊 Результаты ДО boost:")
+            results.take(10).forEachIndexed { index, result ->
+                Log.i(TAG, "  ${index + 1}. ${result.docName} - ${(result.similarity * 100).toInt()}%")
+            }
+            
+            // 3. Применяем умный keyword boost
+            val boostedResults = results.map { result ->
+                var boost = 0f
+                val docNameLower = result.docName.lowercase().removeSuffix(".txt")
+                val docBaseName = docNameLower.substringBefore("_")  // kotlin_basics → kotlin
+                val contentPreview = result.chunkText.lowercase().take(200)  // Первые 200 символов
+                
+                var matchReason = ""
+                
+                // Проверяем каждое ключевое слово
+                for (keyword in keywords) {
+                    val keywordLower = keyword.lowercase()
+                    
+                    when {
+                        // Точное совпадение с началом имени файла - максимальный boost
+                        docBaseName == keywordLower -> {
+                            boost = 0.5f  // +50%
+                            matchReason = "EXACT FILENAME"
+                            Log.i(TAG, "  🎯 EXACT MATCH: ${result.docName} +50% (keyword: $keyword)")
+                            break
+                        }
+                        // Точное совпадение где-то в названии - сильный boost
+                        docNameLower.contains("_${keywordLower}_") || 
+                        docNameLower.contains("_${keywordLower}") ||
+                        docNameLower.startsWith(keywordLower) -> {
+                            boost = maxOf(boost, 0.45f)  // +45%
+                            matchReason = "STRONG FILENAME"
+                            Log.i(TAG, "  ✨ STRONG MATCH: ${result.docName} +45% (keyword: $keyword)")
+                        }
+                        // Ключевое слово в начале содержимого - очень сильный boost
+                        contentPreview.contains(keywordLower) && contentPreview.indexOf(keywordLower) < 50 -> {
+                            boost = maxOf(boost, 0.4f)  // +40%
+                            matchReason = "CONTENT START"
+                            Log.i(TAG, "  📝 CONTENT START: ${result.docName} +40% (keyword: $keyword)")
+                        }
+                        // Частичное совпадение в названии - средний boost
+                        docNameLower.contains(keywordLower) -> {
+                            boost = maxOf(boost, 0.35f)  // +35%
+                            matchReason = "PARTIAL FILENAME"
+                            Log.i(TAG, "  💫 PARTIAL MATCH: ${result.docName} +35% (keyword: $keyword)")
+                        }
+                        // Ключевое слово где-то в содержимом - слабый boost
+                        contentPreview.contains(keywordLower) -> {
+                            boost = maxOf(boost, 0.3f)  // +30%
+                            matchReason = "IN CONTENT"
+                            Log.i(TAG, "  📄 IN CONTENT: ${result.docName} +30% (keyword: $keyword)")
+                        }
+                        // Fuzzy match (для опечаток) - маленький boost
+                        isFuzzyMatch(docNameLower, keywordLower) -> {
+                            boost = maxOf(boost, 0.25f)  // +25%
+                            matchReason = "FUZZY"
+                            Log.i(TAG, "  🔍 FUZZY MATCH: ${result.docName} +25% (keyword: $keyword)")
+                        }
+                    }
+                }
+                
+                if (boost > 0f) {
+                    val boosted = (result.similarity + boost).coerceAtMost(1.0f)
+                    Log.i(TAG, "    ➜ ${result.docName}: ${(result.similarity * 100).toInt()}% → ${(boosted * 100).toInt()}% [$matchReason]")
+                    result.copy(similarity = boosted)
+                } else {
+                    result
+                }
+            }
+            
+            // 4. Пересортируем и берем топ-K
+            val finalResults = boostedResults
+                .sortedByDescending { it.similarity }
+                .take(topK)
+            
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.i(TAG, "✅ ФИНАЛЬНЫЕ результаты после boost (топ-$topK):")
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            finalResults.forEachIndexed { index, result ->
+                Log.i(TAG, "  ${index + 1}. ${result.docName} - ${(result.similarity * 100).toInt()}%")
+            }
+            Log.i(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            
+            Result.success(finalResults)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка поиска с keyword boost: ${e.message}", e)
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Fuzzy matching для учета опечаток (простая версия - расстояние Левенштейна)
+     */
+    private fun isFuzzyMatch(docName: String, keyword: String): Boolean {
+        if (keyword.length < 4) return false  // Слишком короткие слова не проверяем
+        
+        // Разбиваем название файла на части
+        val parts = docName.split("_", "-")
+        
+        for (part in parts) {
+            val distance = levenshteinDistance(part, keyword)
+            // Допускаем 1-2 символа разницы
+            if (distance <= 2 && distance < keyword.length / 2) {
+                return true
+            }
+        }
+        
+        return false
+    }
+    
+    /**
+     * Вычисление расстояния Левенштейна
+     */
+    private fun levenshteinDistance(s1: String, s2: String): Int {
+        val len1 = s1.length
+        val len2 = s2.length
+        val dp = Array(len1 + 1) { IntArray(len2 + 1) }
+        
+        for (i in 0..len1) dp[i][0] = i
+        for (j in 0..len2) dp[0][j] = j
+        
+        for (i in 1..len1) {
+            for (j in 1..len2) {
+                val cost = if (s1[i - 1] == s2[j - 1]) 0 else 1
+                dp[i][j] = minOf(
+                    dp[i - 1][j] + 1,      // deletion
+                    dp[i][j - 1] + 1,      // insertion
+                    dp[i - 1][j - 1] + cost // substitution
+                )
+            }
+        }
+        
+        return dp[len1][len2]
+    }
+    
+    /**
+     * Извлечь ключевые слова из запроса (убираем стоп-слова)
+     */
+    private fun extractKeywords(query: String): List<String> {
+        val stopWords = setOf(
+            "что", "такое", "как", "работает", "это", "где", "когда", 
+            "почему", "расскажи", "про", "о", "в", "на", "и", "а", "или",
+            "существуют", "бывают", "есть", "может", "быть", "можно"
+        )
+        
+        // Маппинг русских технических терминов на английские и нормализованные формы
+        val termMapping = mapOf(
+            // Квантовые вычисления
+            "квантовая" to listOf("quantum", "квант"),
+            "квантовый" to listOf("quantum", "квант"),
+            "квантовые" to listOf("quantum", "квант"),
+            "квантовых" to listOf("quantum", "квант"),
+            "кванта" to listOf("quantum", "квант"),
+            "кубит" to listOf("qubit", "кубит"),
+            "кубиты" to listOf("qubit", "кубит"),
+            "запутанность" to listOf("entanglement", "запутан"),
+            "запутанная" to listOf("entanglement", "запутан"),
+            "суперпозиция" to listOf("superposition", "суперпозиц"),
+            
+            // Нейронные сети
+            "нейронная" to listOf("neural", "нейрон"),
+            "нейронные" to listOf("neural", "нейрон"),
+            "нейронных" to listOf("neural", "нейрон"),
+            "нейросеть" to listOf("neural", "network", "нейрон"),
+            "нейросети" to listOf("neural", "network", "нейрон"),
+            "сеть" to listOf("network", "сет"),
+            "сети" to listOf("network", "сет"),
+            "сетей" to listOf("network", "сет"),
+            "lstm" to listOf("lstm", "rnn"),
+            "rnn" to listOf("rnn", "recurrent"),
+            "cnn" to listOf("cnn", "convolutional"),
+            "transformer" to listOf("transformer", "трансформер"),
+            
+            // Android
+            "activity" to listOf("activity", "активити"),
+            "fragment" to listOf("fragment", "фрагмент"),
+            "viewmodel" to listOf("viewmodel", "вьюмодел"),
+            "jetpack" to listOf("jetpack", "джетпак"),
+            "compose" to listOf("compose", "компоуз"),
+            
+            // Kotlin
+            "kotlin" to listOf("kotlin", "котлин"),
+            "корутины" to listOf("coroutine", "корутин"),
+            "корутина" to listOf("coroutine", "корутин"),
+            "suspend" to listOf("suspend", "саспенд"),
+            
+            // Docker/DevOps
+            "docker" to listOf("docker", "докер"),
+            "контейнер" to listOf("container", "docker"),
+            "контейнеры" to listOf("container", "docker"),
+            "devops" to listOf("devops", "девопс"),
+            "kubernetes" to listOf("kubernetes", "k8s"),
+            
+            // Machine Learning
+            "машинное" to listOf("machine", "learning", "ml"),
+            "машинного" to listOf("machine", "learning", "ml"),
+            "обучение" to listOf("learning", "ml"),
+            "модель" to listOf("model", "модел"),
+            "модели" to listOf("model", "модел"),
+            
+            // RAG
+            "rag" to listOf("rag", "retrieval"),
+            "reranking" to listOf("reranking", "rerank", "ранжирован"),
+            "ранжирование" to listOf("ranking", "rerank", "ранжиров"),
+            "эмбеддинг" to listOf("embedding", "эмбед"),
+            "эмбеддинги" to listOf("embedding", "эмбед"),
+            
+            // Blockchain
+            "блокчейн" to listOf("blockchain", "блок"),
+            "криптовалюта" to listOf("crypto", "blockchain"),
+            "биткоин" to listOf("bitcoin", "btc"),
+            "ethereum" to listOf("ethereum", "eth"),
+            "смарт" to listOf("smart", "contract"),
+            
+            // Web
+            "react" to listOf("react", "реакт"),
+            "javascript" to listOf("javascript", "js"),
+            "typescript" to listOf("typescript", "ts"),
+            "node" to listOf("node", "nodejs"),
+            
+            // Cybersecurity
+            "кибербезопасность" to listOf("cybersecurity", "security", "кибер"),
+            "безопасность" to listOf("security", "безопасн"),
+            "шифрование" to listOf("encryption", "шифр"),
+            "vpn" to listOf("vpn", "network")
+        )
+        
+        // Извлекаем базовые ключевые слова
+        val baseKeywords = query.lowercase()
+            .replace("?", "")
+            .replace("!", "")
+            .split(Regex("[\\s,;:.]+"))
+            .filter { word -> 
+                word.length > 2 && !stopWords.contains(word)
+            }
+        
+        // Расширяем ключевые слова через маппинг
+        val expandedKeywords = mutableSetOf<String>()
+        
+        for (keyword in baseKeywords) {
+            // Добавляем исходное слово
+            expandedKeywords.add(keyword)
+            
+            // Добавляем нормализованную форму (первые 4-5 символов для стемминга)
+            if (keyword.length > 4) {
+                expandedKeywords.add(keyword.substring(0, minOf(5, keyword.length)))
+            }
+            
+            // Добавляем маппинг если есть
+            if (termMapping.containsKey(keyword)) {
+                expandedKeywords.addAll(termMapping[keyword]!!)
+            }
+        }
+        
+        return expandedKeywords.toList()
     }
     
     /**

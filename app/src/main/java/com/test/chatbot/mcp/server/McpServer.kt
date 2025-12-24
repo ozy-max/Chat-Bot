@@ -117,7 +117,8 @@ class McpServer(
                     Log.i(TAG, "✅ Ollama доступна на $ollamaUrl")
                     // Создаём DocumentIndexService перед RAG сервисом
                     documentIndexService = com.test.chatbot.rag.DocumentIndexService(context, ollamaClient)
-                    ollamaRAGService = com.test.chatbot.rag.OllamaRAGService(documentIndexService, ollamaClient!!)
+                    val rerankerService = com.test.chatbot.service.RerankerService(ollamaClient!!)
+                    ollamaRAGService = com.test.chatbot.rag.OllamaRAGService(documentIndexService, ollamaClient!!, rerankerService)
                 } else {
                     Log.w(TAG, "⚠️ Ollama недоступна, используется локальный режим")
                     // Создаём DocumentIndexService с локальными эмбеддингами
@@ -850,6 +851,24 @@ class McpServer(
                         ),
                         "required" to listOf("question")
                     )
+                ),
+                mapOf(
+                    "name" to "compare_filtering",
+                    "description" to "Сравнить методы фильтрации: без фильтра, с threshold, с LLM reranker",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "question" to mapOf(
+                                "type" to "string",
+                                "description" to "Вопрос для сравнения"
+                            ),
+                            "model" to mapOf(
+                                "type" to "string",
+                                "description" to "Модель Ollama (по умолчанию llama3)"
+                            )
+                        ),
+                        "required" to listOf("question")
+                    )
                 )
             )
         )
@@ -914,6 +933,7 @@ class McpServer(
             "ollama_configure" -> runBlocking { ollamaConfigure(arguments) }
             "rag_query" -> runBlocking { ragQuery(arguments) }
             "compare_rag" -> runBlocking { compareRAG(arguments) }
+            "compare_filtering" -> runBlocking { compareFiltering(arguments) }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -1897,7 +1917,8 @@ class McpServer(
             val text = if (available) {
                 ollamaEnabled = true
                 // Инициализируем RAG сервис (используем существующий documentIndexService)
-                ollamaRAGService = com.test.chatbot.rag.OllamaRAGService(documentIndexService, ollamaClient!!)
+                val rerankerService = com.test.chatbot.service.RerankerService(ollamaClient!!)
+                ollamaRAGService = com.test.chatbot.rag.OllamaRAGService(documentIndexService, ollamaClient!!, rerankerService)
                 Log.i(TAG, "✅ OllamaRAGService инициализирован")
                 "✅ Ollama настроена успешно\n\nURL: $ollamaUrl\nСтатус: Подключено\n\n🧠 RAG активирован"
             } else {
@@ -1979,6 +2000,40 @@ class McpServer(
                 )
             } else {
                 createErrorMessage("Ошибка сравнения: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    private suspend fun compareFiltering(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val question = arguments?.get("question")?.asString
+            val model = arguments?.get("model")?.asString ?: "llama3"
+            
+            if (question.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать вопрос")
+            }
+            
+            if (ollamaRAGService == null) {
+                return createErrorMessage(
+                    "RAG недоступен. Ollama не подключена.\n\n" +
+                    "Используйте /ollama config для настройки"
+                )
+            }
+            
+            // Выполняем сравнение фильтрации
+            val result = ollamaRAGService!!.compareFiltering(question, model)
+            
+            if (result.isSuccess) {
+                val comparison = result.getOrNull()!!
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to comparison.toFormattedString())
+                    )
+                )
+            } else {
+                createErrorMessage("Ошибка сравнения фильтрации: ${result.exceptionOrNull()?.message}")
             }
         } catch (e: Exception) {
             createErrorResponse(e)

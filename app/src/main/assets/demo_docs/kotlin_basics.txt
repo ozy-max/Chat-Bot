@@ -98,3 +98,4 @@ class MyClass {
 Android разработка
 Kotlin официально рекомендуется Google для Android. Jetpack Compose - современный UI фреймворк написан на Kotlin.
 
+

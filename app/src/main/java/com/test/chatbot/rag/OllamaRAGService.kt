@@ -620,26 +620,65 @@ data class RAGResponse(
             // Чистый ответ
             append(answer)
             
+            // Фильтруем и группируем источники
+            val relevantSources = sources
+                .filter { it.similarity >= 0.80f } // Только высокорелевантные (80%+)
+                .groupBy { it.docName } // Группируем по документу
+                .map { (_, chunks) -> chunks.maxByOrNull { it.similarity }!! } // Берем САМЫЙ релевантный чанк из каждого документа
+                .sortedByDescending { it.similarity } // Сортируем по релевантности
+                .take(3) // Берем топ-3 документа
+            
             // Детальный список источников
-            if (sources.isNotEmpty()) {
+            if (relevantSources.isNotEmpty()) {
                 append("\n\n")
                 append("━━━━━━━━━━━━━━━━━━━━\n")
-                append("📚 ИСТОЧНИКИ (${sources.size}):\n")
+                append("📚 ИСТОЧНИКИ (${relevantSources.size}):\n")
                 append("━━━━━━━━━━━━━━━━━━━━\n\n")
                 
-                sources.take(5).forEachIndexed { index, source ->
+                relevantSources.forEachIndexed { index, source ->
                     append("${index + 1}. ${source.docName.removeSuffix(".txt")}\n")
                     append("   📊 Релевантность: ${(source.similarity * 100).toInt()}%\n")
-                    append("   📝 Фрагмент: ${source.chunkText.take(150).trim()}...")
-                    if (index < sources.size - 1) append("\n\n")
-                }
-                
-                if (sources.size > 5) {
-                    append("\n\n...и ещё ${sources.size - 5} источников")
+                    
+                    // Показываем осмысленный фрагмент (не меньше 50 символов)
+                    val fragment = source.chunkText.trim()
+                    val displayFragment = if (fragment.length > 50) {
+                        fragment.take(200).trim() + "..."
+                    } else {
+                        fragment
+                    }
+                    append("   📝 ${displayFragment}")
+                    
+                    if (index < relevantSources.size - 1) append("\n\n")
                 }
                 
                 append("\n\n━━━━━━━━━━━━━━━━━━━━\n")
-                append("🎯 Средняя уверенность: ${(confidence * 100).toInt()}%")
+                append("🎯 Средняя уверенность: ${(relevantSources.map { it.similarity }.average() * 100).toInt()}%")
+            } else if (sources.isNotEmpty()) {
+                // Если нет высокорелевантных источников - показываем лучшие
+                val bestSources = sources
+                    .groupBy { it.docName }
+                    .map { (_, chunks) -> chunks.maxByOrNull { it.similarity }!! }
+                    .sortedByDescending { it.similarity }
+                    .take(2)
+                
+                if (bestSources.first().similarity >= 0.6f) {
+                    append("\n\n━━━━━━━━━━━━━━━━━━━━\n")
+                    append("📚 НАЙДЕННЫЕ ИСТОЧНИКИ (${bestSources.size}):\n")
+                    append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                    
+                    bestSources.forEachIndexed { index, source ->
+                        append("${index + 1}. ${source.docName.removeSuffix(".txt")}\n")
+                        append("   📊 Релевантность: ${(source.similarity * 100).toInt()}%\n")
+                        val fragment = source.chunkText.trim().take(200)
+                        append("   📝 ${fragment}...")
+                        if (index < bestSources.size - 1) append("\n\n")
+                    }
+                    append("\n\n━━━━━━━━━━━━━━━━━━━━")
+                } else {
+                    append("\n\n━━━━━━━━━━━━━━━━━━━━\n")
+                    append("⚠️ Не найдено релевантных источников\n")
+                    append("🎯 Максимальная релевантность: ${(sources.maxOfOrNull { it.similarity }?.times(100))?.toInt() ?: 0}%")
+                }
             }
         }
     }

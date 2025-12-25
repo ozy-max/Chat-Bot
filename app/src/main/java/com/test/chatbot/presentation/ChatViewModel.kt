@@ -2071,7 +2071,26 @@ class ChatViewModel(
      * Умный гибридный режим с анализом
      */
     private suspend fun handleRAGQueryAutomatic(question: String) {
-        // 1. АНАЛИЗ: определяем тип запроса
+        // 1. ПРОВЕРКА ИСТОРИИ: был ли уже такой вопрос?
+        val similarInHistory = findSimilarInHistory(question)
+        
+        if (similarInHistory != null) {
+            // Нашли похожий вопрос - отвечаем из истории
+            addBotMessage(buildString {
+                append("🧠 АНАЛИЗ ЗАПРОСА:\n")
+                append("━━━━━━━━━━━━━━━━━━━━\n")
+                append("📊 История чата: ✅ ДА\n")
+                append("📚 Документы (RAG): ❌ НЕТ\n")
+                append("🌐 API (LLM): ❌ НЕТ\n")
+                append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                append("💾 Найден ответ в истории диалога!\n\n")
+                append(similarInHistory)
+            })
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        // 2. АНАЛИЗ: определяем тип запроса
         val analysis = analyzeMessageType(question)
         
         val analysisMessage = buildString {
@@ -2093,13 +2112,17 @@ class ChatViewModel(
         
         addBotMessage(analysisMessage)
         
-        // 2. ИСТОРИЯ: собираем контекст диалога
-        val historyContext = if (analysis.needsHistory) {
-            getDialogHistoryContext()
-        } else ""
+        // 3. ИСТОРИЯ: собираем контекст диалога для справки
+        val historyContext = getDialogHistoryContext()
         
-        // 3. Выбор стратегии ответа
+        // 4. Выбор стратегии ответа
         when {
+            // Вопрос "помнишь" / "как меня зовут" → ищем в истории
+            analysis.needsHistory && (question.lowercase().contains("помнишь") || 
+                                      question.lowercase().contains("как меня зовут") ||
+                                      question.lowercase().contains("кто я")) -> {
+                answerFromHistorySearch(question, historyContext)
+            }
             // Технический вопрос → RAG
             analysis.needsDocuments -> {
                 val documentContext = searchInDocuments(question)
@@ -2114,6 +2137,74 @@ class ChatViewModel(
                 answerFromAPI(question, historyContext)
             }
         }
+    }
+    
+    /**
+     * Поиск похожего вопроса в истории (кэш ответов)
+     */
+    private fun findSimilarInHistory(question: String): String? {
+        val questionLower = question.lowercase().trim()
+        val messages = _uiState.value.messages
+        
+        // Ищем похожие вопросы (игнорируем служебные сообщения)
+        for (i in messages.indices step 2) {
+            if (i + 1 < messages.size) {
+                val userMessage = messages[i]
+                val botMessage = messages[i + 1]
+                
+                if (userMessage.isUser && !botMessage.isUser) {
+                    val prevQuestion = userMessage.text.lowercase().trim()
+                    
+                    // Проверяем похожесть (простая проверка)
+                    if (areSimilarQuestions(prevQuestion, questionLower)) {
+                        // Убираем анализ и оставляем только ответ
+                        return botMessage.text
+                            .replace(Regex("🧠 АНАЛИЗ.*?━━━━━━━━━━━━━━━━━━━━\n\n.*?\n\n"), "")
+                            .trim()
+                    }
+                }
+            }
+        }
+        
+        return null
+    }
+    
+    /**
+     * Проверка похожести вопросов
+     */
+    private fun areSimilarQuestions(q1: String, q2: String): Boolean {
+        // Убираем знаки препинания
+        val clean1 = q1.replace(Regex("[?!.,]"), "").trim()
+        val clean2 = q2.replace(Regex("[?!.,]"), "").trim()
+        
+        // Точное совпадение
+        if (clean1 == clean2) return true
+        
+        // Очень похожие (>=80% общих слов)
+        val words1 = clean1.split(Regex("\\s+")).filter { it.length > 2 }.toSet()
+        val words2 = clean2.split(Regex("\\s+")).filter { it.length > 2 }.toSet()
+        
+        if (words1.isEmpty() || words2.isEmpty()) return false
+        
+        val common = words1.intersect(words2).size
+        val total = maxOf(words1.size, words2.size)
+        
+        return common.toFloat() / total >= 0.8f
+    }
+    
+    /**
+     * Поиск ответа в истории по ключевым словам
+     */
+    private suspend fun answerFromHistorySearch(question: String, history: String) {
+        if (history.isEmpty()) {
+            addBotMessage("❌ История диалога пуста.")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        // Ищем ответ в истории через API с контекстом
+        val prompt = "На основе истории диалога ответь на вопрос: $question$history"
+        answerFromAPI(prompt, "")
     }
     
     /**

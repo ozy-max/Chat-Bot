@@ -617,15 +617,29 @@ data class RAGResponse(
 ) {
     fun toFormattedString(): String {
         return buildString {
-            // Только чистый ответ
+            // Чистый ответ
             append(answer)
             
-            // Краткий список источников в конце (если есть)
+            // Детальный список источников
             if (sources.isNotEmpty()) {
                 append("\n\n")
                 append("━━━━━━━━━━━━━━━━━━━━\n")
-                append("📚 Источники: ")
-                append(sources.joinToString(", ") { it.docName.removeSuffix(".txt") })
+                append("📚 ИСТОЧНИКИ (${sources.size}):\n")
+                append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                
+                sources.take(5).forEachIndexed { index, source ->
+                    append("${index + 1}. ${source.docName.removeSuffix(".txt")}\n")
+                    append("   📊 Релевантность: ${(source.similarity * 100).toInt()}%\n")
+                    append("   📝 Фрагмент: ${source.chunkText.take(150).trim()}...")
+                    if (index < sources.size - 1) append("\n\n")
+                }
+                
+                if (sources.size > 5) {
+                    append("\n\n...и ещё ${sources.size - 5} источников")
+                }
+                
+                append("\n\n━━━━━━━━━━━━━━━━━━━━\n")
+                append("🎯 Средняя уверенность: ${(confidence * 100).toInt()}%")
             }
         }
     }

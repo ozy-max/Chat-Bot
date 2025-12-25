@@ -309,35 +309,12 @@ class ChatViewModel(
             savePendingUserMessages()
         }
         
-        // Добавляем в историю в зависимости от провайдера
-        when (_uiState.value.selectedProvider) {
-            AiProvider.CLAUDE -> {
-                claudeHistory.add(ClaudeMessage(role = "user", content = userMessage))
-            }
-            AiProvider.YANDEX_GPT -> {
-                // Добавляем системное сообщение если история пуста
-                if (yandexHistory.isEmpty()) {
-                    yandexHistory.add(YandexGptMessage(
-                        role = "system",
-                        text = "Ты — универсальный ИИ-ассистент. Отвечай на русском языке."
-                    ))
-                }
-                yandexHistory.add(YandexGptMessage(role = "user", text = userMessage))
-            }
-        }
-        
-        // Увеличиваем счетчик сообщений
-        messagesSinceCompression++
-        totalOriginalTokens += repository.estimateTokens(userMessage)
-        
         // Отправляем запрос
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
             try {
-                when (_uiState.value.selectedProvider) {
-                    AiProvider.CLAUDE -> sendToClaude()
-                    AiProvider.YANDEX_GPT -> sendToYandexGpt()
-                }
+                // 🚀 ВСЕГДА используем RAG для всех вопросов
+                handleRAGQueryAutomatic(userMessage)
                 
                 // Проверяем нужна ли автоматическая компрессия
                 checkAndPerformAutoCompression()
@@ -1773,10 +1750,31 @@ class ChatViewModel(
             🦙 OLLAMA (AI):
             /ollama status - проверить Ollama
             /ollama config <url> - настроить URL
-            /ask <вопрос> - RAG с генерацией ответа
+            
+            💬 ГИБРИДНЫЙ РЕЖИМ (AUTO):
+            ✨ Умный анализ каждого сообщения:
+            
+            1️⃣ ИСТОРИЯ ЧАТА
+               - Личные вопросы ("меня зовут", "помнишь")
+               - Контекстные вопросы ("а как", "подробнее")
+            
+            2️⃣ ДОКУМЕНТЫ (RAG)
+               - Технические вопросы ("что такое Docker")
+               - Автоматический поиск в базе знаний
+               - Ответы с источниками
+            
+            3️⃣ API (YandexGPT/Claude)
+               - Общие разговоры
+               - Творческие задачи
+               - Сложные вопросы
+            
+            📋 RAG КОМАНДЫ:
+            /ask <вопрос> - явный RAG запрос
+            /rag <вопрос> - альтернатива /ask
+            
+            🔬 АНАЛИТИКА:
             /compare <вопрос> - сравнить RAG vs No-RAG
             /filter <вопрос> - сравнить методы фильтрации
-            /rag <вопрос> - альтернатива /ask
             
             /help - показать эту справку
         """.trimIndent()
@@ -2055,7 +2053,9 @@ class ChatViewModel(
     }
     
     private suspend fun handleRAGQueryCommand(question: String) {
-        val result = mcpClient?.callTool("rag_query", mapOf("question" to question, "top_k" to 10))
+        addBotMessage("💬 Ищу информацию в базе знаний...\n⏱️ Подготовка ответа с источниками...")
+        
+        val result = mcpClient?.callTool("rag_query", mapOf("question" to question, "top_k" to 15))
         
         result?.onSuccess { toolResult ->
             val ragAnswer = toolResult.content.firstOrNull()?.text ?: "Нет ответа"
@@ -2066,6 +2066,190 @@ class ChatViewModel(
             _uiState.update { it.copy(isLoading = false) }
         }
     }
+    
+    /**
+     * Умный гибридный режим с анализом
+     */
+    private suspend fun handleRAGQueryAutomatic(question: String) {
+        // 1. АНАЛИЗ: определяем тип запроса
+        val analysis = analyzeMessageType(question)
+        
+        val analysisMessage = buildString {
+            append("🧠 АНАЛИЗ ЗАПРОСА:\n")
+            append("━━━━━━━━━━━━━━━━━━━━\n")
+            append("📊 История чата: ${if (analysis.needsHistory) "✅ ДА" else "❌ НЕТ"}\n")
+            append("📚 Документы (RAG): ${if (analysis.needsDocuments) "✅ ДА" else "❌ НЕТ"}\n")
+            append("🌐 API (LLM): ${if (analysis.needsAPI) "✅ ДА" else "❌ НЕТ"}\n")
+            append("━━━━━━━━━━━━━━━━━━━━\n\n")
+            
+            // Объяснение решения
+            when {
+                analysis.needsDocuments -> append("🔍 Технический вопрос → ищу в базе знаний")
+                analysis.needsHistory && !analysis.needsDocuments -> append("💭 Личная информация → использую историю")
+                analysis.needsAPI && !analysis.needsDocuments -> append("🤖 Общий разговор → использую AI")
+                else -> append("⏱️ Готовлю ответ...")
+            }
+        }
+        
+        addBotMessage(analysisMessage)
+        
+        // 2. ИСТОРИЯ: собираем контекст диалога
+        val historyContext = if (analysis.needsHistory) {
+            getDialogHistoryContext()
+        } else ""
+        
+        // 3. Выбор стратегии ответа
+        when {
+            // Технический вопрос → RAG
+            analysis.needsDocuments -> {
+                val documentContext = searchInDocuments(question)
+                if (documentContext != null) {
+                    answerFromRAG(question, historyContext, documentContext)
+                } else {
+                    answerFromAPI(question, historyContext)
+                }
+            }
+            // Личная информация или общий разговор → API
+            else -> {
+                answerFromAPI(question, historyContext)
+            }
+        }
+    }
+    
+    /**
+     * Анализ типа сообщения
+     */
+    private fun analyzeMessageType(message: String): MessageAnalysis {
+        val messageLower = message.lowercase()
+        
+        // Ключевые слова для технических вопросов
+        val techKeywords = listOf(
+            "что такое", "как работает", "расскажи про", "объясни",
+            "docker", "kotlin", "android", "нейрон", "квантов", "блокчейн",
+            "rag", "машинное обучение", "api", "база данных", "типы", "применяется"
+        )
+        
+        // Ключевые слова для личных вопросов/утверждений
+        val personalKeywords = listOf(
+            "меня зовут", "я живу", "мой любимый", "моя любимая", "я ел",
+            "вчера", "сегодня", "завтра", "помнишь", "ты знаешь что я",
+            "я смотрю", "я делаю", "мне нравится", "у меня", "мой", "моя"
+        )
+        
+        // Ключевые слова для контекстных вопросов
+        val contextKeywords = listOf(
+            "а как", "а где", "также", "еще", "подробнее", "об этом"
+        )
+        
+        val hasTechKeywords = techKeywords.any { messageLower.contains(it) }
+        val hasPersonalKeywords = personalKeywords.any { messageLower.contains(it) }
+        val hasContextKeywords = contextKeywords.any { messageLower.contains(it) }
+        val isShortQuestion = message.length < 50 && message.contains("?")
+        val hasQuestionWord = messageLower.startsWith("что") || messageLower.startsWith("как") || 
+                              messageLower.startsWith("где") || messageLower.startsWith("когда")
+        
+        return MessageAnalysis(
+            needsHistory = hasPersonalKeywords || hasContextKeywords || (isShortQuestion && !hasTechKeywords),
+            needsDocuments = hasTechKeywords && !hasPersonalKeywords && hasQuestionWord,
+            needsAPI = hasPersonalKeywords || (!hasTechKeywords && !hasContextKeywords) || !hasQuestionWord
+        )
+    }
+    
+    /**
+     * Получить контекст истории диалога
+     */
+    private fun getDialogHistoryContext(): String {
+        val recentMessages = _uiState.value.messages.takeLast(6).dropLast(1) // Последние 6, убираем текущее
+        return if (recentMessages.isNotEmpty()) {
+            "\n\nКонтекст из истории диалога:\n" + recentMessages.joinToString("\n") { msg ->
+                val cleanText = msg.text
+                    .replace(Regex("🧠 АНАЛИЗ.*?━━━━━━━━━━━━━━━━━━━━\n\n"), "") // Убираем анализ
+                    .replace(Regex("📚 ИСТОЧНИКИ.*"), "") // Убираем источники
+                    .take(200)
+                if (msg.isUser) "Пользователь: $cleanText" else "Ассистент: $cleanText"
+            }
+        } else ""
+    }
+    
+    /**
+     * Поиск в документах
+     */
+    private suspend fun searchInDocuments(query: String): RAGContext? {
+        return try {
+            val result = mcpClient?.callTool("rag_query", mapOf(
+                "question" to query,
+                "top_k" to 15
+            ))
+            
+            result?.getOrNull()?.content?.firstOrNull()?.text?.let { RAGContext(it) }
+        } catch (e: Exception) {
+            null
+        }
+    }
+    
+    /**
+     * Ответ на основе истории
+     */
+    private suspend fun answerFromHistory(question: String, history: String) {
+        // Просто передаем в API с историей - API сам разберется
+        answerFromAPI(question, history)
+    }
+    
+    /**
+     * Ответ из RAG (документы + история)
+     */
+    private suspend fun answerFromRAG(question: String, history: String, ragContext: RAGContext) {
+        addBotMessage(ragContext.answer)
+        _uiState.update { it.copy(isLoading = false) }
+    }
+    
+    /**
+     * Ответ через API (с учетом истории)
+     */
+    private suspend fun answerFromAPI(question: String, history: String) {
+        when (_uiState.value.selectedProvider) {
+            AiProvider.CLAUDE -> {
+                // Добавляем текущий вопрос (история уже в claudeHistory)
+                claudeHistory.add(ClaudeMessage(role = "user", content = question))
+                sendToClaude()
+            }
+            AiProvider.YANDEX_GPT -> {
+                // Системное сообщение с инструкциями
+                if (yandexHistory.isEmpty()) {
+                    yandexHistory.add(YandexGptMessage(
+                        role = "system",
+                        text = "Ты — дружелюбный AI-ассистент. Отвечай на русском языке. " +
+                               "Если пользователь делится личной информацией - запоминай её и используй в диалоге. " +
+                               "Обращайся к пользователю по имени если он представился."
+                    ))
+                }
+                
+                // Добавляем вопрос с историей если нужно
+                val messageText = if (history.isNotEmpty() && history.contains("Пользователь:")) {
+                    "$history\n\nТекущий вопрос: $question"
+                } else {
+                    question
+                }
+                
+                yandexHistory.add(YandexGptMessage(role = "user", text = messageText))
+                sendToYandexGpt()
+            }
+        }
+    }
+    
+    /**
+     * Анализ сообщения
+     */
+    private data class MessageAnalysis(
+        val needsHistory: Boolean,
+        val needsDocuments: Boolean,
+        val needsAPI: Boolean
+    )
+    
+    /**
+     * Контекст RAG
+     */
+    private data class RAGContext(val answer: String)
     
     private suspend fun handleCompareRAGCommand(question: String) {
         addBotMessage("🔬 Сравнение RAG vs No-RAG...\n\nЭто может занять 30-60 секунд.")

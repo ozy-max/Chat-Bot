@@ -7,6 +7,12 @@ import com.google.gson.JsonObject
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.*
 import java.io.IOException
+import java.util.concurrent.TimeUnit
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
+import com.google.gson.JsonParser
 
 // Import new services
 import com.test.chatbot.mcp.server.SystemMonitorService
@@ -49,6 +55,9 @@ class McpServer(
     private lateinit var documentIndexService: com.test.chatbot.rag.DocumentIndexService
     private var ollamaClient: com.test.chatbot.rag.OllamaClient? = null
     private var ollamaRAGService: com.test.chatbot.rag.OllamaRAGService? = null
+    
+    // Project integration services
+    private var projectDocsService: ProjectDocsService? = null
     
     // Ollama configuration
     private var ollamaUrl: String = ""
@@ -119,6 +128,10 @@ class McpServer(
                     documentIndexService = com.test.chatbot.rag.DocumentIndexService(context, ollamaClient)
                     val rerankerService = com.test.chatbot.service.RerankerService(ollamaClient!!)
                     ollamaRAGService = com.test.chatbot.rag.OllamaRAGService(documentIndexService, ollamaClient!!, rerankerService)
+                    
+                    // Создаём ProjectDocsService для RAG по проекту
+                    projectDocsService = ProjectDocsService(context, documentIndexService, ollamaRAGService!!)
+                    Log.i(TAG, "✅ ProjectDocsService инициализирован")
                 } else {
                     Log.w(TAG, "⚠️ Ollama недоступна, используется локальный режим")
                     // Создаём DocumentIndexService с локальными эмбеддингами
@@ -869,6 +882,78 @@ class McpServer(
                         ),
                         "required" to listOf("question")
                     )
+                ),
+                // ============================================
+                // PROJECT & GIT TOOLS
+                // ============================================
+                mapOf(
+                    "name" to "project_info",
+                    "description" to "Получить информацию о проекте (архитектура, компоненты, статистика RAG)",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "git_status",
+                    "description" to "Показать информацию о Git (недоступно на Android, показывает альтернативы)",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "git_search",
+                    "description" to "Поиск в проиндексированной документации проекта через RAG",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "query" to mapOf(
+                                "type" to "string",
+                                "description" to "Поисковый запрос"
+                            )
+                        ),
+                        "required" to listOf("query")
+                    )
+                ),
+                mapOf(
+                    "name" to "project_index",
+                    "description" to "Проиндексировать документацию проекта для RAG",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "project_help",
+                    "description" to "Получить помощь по проекту через RAG",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "topic" to mapOf(
+                                "type" to "string",
+                                "description" to "Тема для помощи"
+                            )
+                        ),
+                        "required" to listOf("topic")
+                    )
+                ),
+                mapOf(
+                    "name" to "project_search_docs",
+                    "description" to "Поиск по документации проекта",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "query" to mapOf(
+                                "type" to "string",
+                                "description" to "Поисковый запрос"
+                            )
+                        ),
+                        "required" to listOf("query")
+                    )
                 )
             )
         )
@@ -934,6 +1019,13 @@ class McpServer(
             "rag_query" -> runBlocking { ragQuery(arguments) }
             "compare_rag" -> runBlocking { compareRAG(arguments) }
             "compare_filtering" -> runBlocking { compareFiltering(arguments) }
+            // Project & Git Tools
+            "project_info" -> runBlocking { getProjectInfo() }
+            "git_status" -> runBlocking { getGitStatus() }
+            "git_search" -> runBlocking { gitSearch(arguments) }
+            "project_index" -> runBlocking { indexProjectDocs() }
+            "project_help" -> runBlocking { getProjectHelp(arguments) }
+            "project_search_docs" -> runBlocking { searchProjectDocs(arguments) }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -2056,6 +2148,75 @@ class McpServer(
         )
     }
     
+    /**
+     * Вызвать Python MCP сервер через HTTP
+     */
+    private suspend fun callPythonMcpServer(toolName: String, arguments: Map<String, Any>?): Map<String, Any> = withContext(Dispatchers.IO) {
+        try {
+            val client = OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build()
+            
+            // Создаем JSON-RPC запрос
+            val params = JsonObject().apply {
+                addProperty("name", toolName)
+                if (arguments != null) {
+                    add("arguments", gson.toJsonTree(arguments))
+                }
+            }
+            
+            val jsonRpcRequest = JsonObject().apply {
+                addProperty("jsonrpc", "2.0")
+                addProperty("id", 1)
+                addProperty("method", "tools/call")
+                add("params", params)
+            }
+            
+            val requestBody = jsonRpcRequest.toString().toRequestBody("application/json".toMediaTypeOrNull())
+            
+            val request = Request.Builder()
+                .url("http://10.0.2.2:3000/mcp")  // 10.0.2.2 это localhost для Android эмулятора
+                .post(requestBody)
+                .addHeader("Content-Type", "application/json")
+                .build()
+            
+            Log.d(TAG, "📤 Calling Python MCP: $toolName")
+            val response = client.newCall(request).execute()
+            
+            if (!response.isSuccessful) {
+                throw Exception("HTTP ${response.code}: ${response.message}")
+            }
+            
+            val responseBody = response.body?.string() ?: throw Exception("Empty response")
+            Log.d(TAG, "📥 Python MCP response: ${responseBody.take(200)}")
+            
+            val jsonResponse = JsonParser.parseString(responseBody).asJsonObject
+            
+            // Извлекаем результат из JSON-RPC ответа
+            if (jsonResponse.has("error")) {
+                val error = jsonResponse.getAsJsonObject("error")
+                throw Exception(error.get("message").asString)
+            }
+            
+            val result = jsonResponse.getAsJsonObject("result")
+            
+            // Конвертируем в Map
+            mapOf(
+                "content" to result.getAsJsonArray("content").map { element ->
+                    val obj = element.asJsonObject
+                    mapOf(
+                        "type" to obj.get("type").asString,
+                        "text" to obj.get("text").asString
+                    )
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка вызова Python MCP сервера: ${e.message}", e)
+            throw e
+        }
+    }
+    
     private fun createErrorResponse(e: Exception): Map<String, Any> {
         return mapOf(
             "content" to listOf(
@@ -2094,6 +2255,208 @@ class McpServer(
             "application/json",
             """{"error": "$message"}"""
         )
+    }
+    
+    // ============================================
+    // PROJECT & GIT INTEGRATION
+    // ============================================
+    
+    /**
+     * Получить информацию о проекте
+     */
+    private suspend fun getProjectInfo(): Map<String, Any> {
+        return try {
+            // Вызываем Python MCP сервер для получения реальной Git информации
+            callPythonMcpServer("project_info", null)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка получения информации о проекте: ${e.message}", e)
+            
+            // Fallback: показываем статическую информацию
+            val text = buildString {
+                append("📁 Информация о проекте ChatBot\n")
+                append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                append("⚠️ Python MCP сервер недоступен\n\n")
+                append("📱 **Платформа:** Android (Kotlin)\n")
+                append("🏗️ **Архитектура:** MVVM + Jetpack Compose\n\n")
+                append("💡 Запустите Python MCP сервер для Git интеграции:\n")
+                append("```bash\n")
+                append("cd /Users/igorurev/FlutterProjects/ChatBot/mcp-server\n")
+                append("python3 server.py\n")
+                append("```")
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        }
+    }
+    
+    /**
+     * Получить Git статус
+     */
+    private suspend fun getGitStatus(): Map<String, Any> {
+        return try {
+            // Вызываем Python MCP сервер для получения реального Git статуса
+            callPythonMcpServer("git_status", null)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка получения Git статуса: ${e.message}", e)
+            
+            // Fallback: показываем инструкцию
+            val text = buildString {
+                append("🌿 Git статус проекта\n")
+                append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                append("⚠️ **Python MCP сервер недоступен**\n\n")
+                append("Для Git интеграции запустите Python MCP сервер:\n\n")
+                append("```bash\n")
+                append("cd /Users/igorurev/FlutterProjects/ChatBot/mcp-server\n")
+                append("python3 server.py\n")
+                append("```\n\n")
+                append("После запуска сервера повторите команду `/git status`")
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to text)
+                )
+            )
+        }
+    }
+    
+    /**
+     * Поиск в проекте через Git grep (Python MCP сервер)
+     */
+    private suspend fun gitSearch(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val query = arguments?.get("query")?.asString
+            if (query.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать поисковый запрос")
+            }
+            
+            // Пытаемся использовать Python MCP сервер для git grep
+            try {
+                val params = mapOf("query" to query)
+                callPythonMcpServer("git_search", params)
+            } catch (pythonError: Exception) {
+                Log.w(TAG, "Python MCP недоступен, используем RAG fallback")
+                
+                // Fallback: если Python сервер недоступен, используем RAG
+                if (projectDocsService != null) {
+                    val searchResult = projectDocsService!!.searchProjectDocs(query)
+                    
+                    mapOf(
+                        "content" to listOf(
+                            mapOf("type" to "text", "text" to "🔍 Поиск через RAG (Python MCP недоступен)\n\n$searchResult")
+                        )
+                    )
+                } else {
+                    // Если и RAG недоступен
+                    val text = buildString {
+                        append("🔍 Поиск: \"$query\"\n")
+                        append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                        append("⚠️ Поиск недоступен\n\n")
+                        append("**Вариант 1: Git grep (рекомендуется)**\n")
+                        append("Запустите Python MCP сервер:\n")
+                        append("```bash\n")
+                        append("cd /Users/igorurev/FlutterProjects/ChatBot/mcp-server\n")
+                        append("python3 server.py\n")
+                        append("```\n\n")
+                        append("**Вариант 2: RAG поиск**\n")
+                        append("1. `/project index` - проиндексировать\n")
+                        append("2. `/project search $query` - искать через RAG")
+                    }
+                    
+                    mapOf(
+                        "content" to listOf(
+                            mapOf("type" to "text", "text" to text)
+                        )
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка поиска", e)
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Индексировать документацию проекта
+     */
+    private suspend fun indexProjectDocs(): Map<String, Any> {
+        return try {
+            if (projectDocsService == null) {
+                return createErrorMessage(
+                    "ProjectDocsService недоступен. Ollama не подключена.\n\n" +
+                    "Используйте команду для настройки Ollama"
+                )
+            }
+            
+            val result = projectDocsService!!.indexProjectDocs()
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Получить помощь по проекту
+     */
+    private suspend fun getProjectHelp(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val topic = arguments?.get("topic")?.asString
+            if (topic.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать тему")
+            }
+            
+            if (projectDocsService == null) {
+                return createErrorMessage(
+                    "ProjectDocsService недоступен.\n\n" +
+                    "Сначала проиндексируйте проект: /project index"
+                )
+            }
+            
+            val help = projectDocsService!!.getHelp(topic)
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to help)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Поиск по документации проекта
+     */
+    private suspend fun searchProjectDocs(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val query = arguments?.get("query")?.asString
+            if (query.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать поисковый запрос")
+            }
+            
+            if (projectDocsService == null) {
+                return createErrorMessage(
+                    "ProjectDocsService недоступен.\n\n" +
+                    "Сначала проиндексируйте проект"
+                )
+            }
+            
+            val results = projectDocsService!!.searchProjectDocs(query)
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to results)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
     }
 }
 

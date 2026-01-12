@@ -1224,8 +1224,25 @@ class ChatViewModel(
                     }
                     
                     "help" -> {
-                        addBotMessage(getHelpMessage())
-                        _uiState.update { it.copy(isLoading = false) }
+                        val topic = parts.drop(1).joinToString(" ").trim()
+                        if (topic.isBlank()) {
+                            addBotMessage(getHelpMessage())
+                            _uiState.update { it.copy(isLoading = false) }
+                        } else {
+                            handleHelpTopicCommand(topic)
+                        }
+                    }
+                    
+                    // Project & Git Integration
+                    "project" -> {
+                        val subCommand = parts.getOrNull(1)?.trim() ?: "info"
+                        handleProjectCommand(subCommand)
+                    }
+                    
+                    "git" -> {
+                        val subCommand = parts.getOrNull(1)?.trim() ?: "status"
+                        val args = parts.drop(2).joinToString(" ").trim()
+                        handleGitCommand(subCommand, args)
                     }
                     
                     else -> {
@@ -2389,5 +2406,97 @@ class ChatViewModel(
     private fun addBotMessage(text: String) {
         val botMsg = Message(text = text, isUser = false)
         _uiState.update { it.copy(messages = it.messages + botMsg) }
+    }
+    
+    // ==================== Project & Git Commands ====================
+    
+    private suspend fun handleHelpTopicCommand(topic: String) {
+        val result = mcpClient?.callTool("project_help", mapOf("topic" to topic))
+        
+        result?.onSuccess { toolResult ->
+            val help = toolResult.content.firstOrNull()?.text ?: "Нет информации"
+            addBotMessage(help)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка: ${it.message}\n\n💡 Сначала проиндексируйте проект: /project index")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    private suspend fun handleProjectCommand(subCommand: String) {
+        when (subCommand) {
+            "info" -> {
+                val result = mcpClient?.callTool("project_info", emptyMap())
+                result?.onSuccess { toolResult ->
+                    val info = toolResult.content.firstOrNull()?.text ?: "Нет информации"
+                    addBotMessage(info)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "index" -> {
+                addBotMessage("📚 Индексация документации проекта...\n\nЭто может занять некоторое время.")
+                val result = mcpClient?.callTool("project_index", emptyMap())
+                result?.onSuccess { toolResult ->
+                    val message = toolResult.content.firstOrNull()?.text ?: "Индексация завершена"
+                    addBotMessage(message)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка индексации: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "search" -> {
+                addBotMessage("❌ Используйте: /project search <запрос>")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+            else -> {
+                addBotMessage("📁 Команды /project:\n" +
+                    "• /project info - информация о проекте\n" +
+                    "• /project index - проиндексировать документацию\n" +
+                    "• /project search <запрос> - поиск в документации")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    private suspend fun handleGitCommand(subCommand: String, args: String) {
+        when (subCommand) {
+            "status" -> {
+                val result = mcpClient?.callTool("git_status", emptyMap())
+                result?.onSuccess { toolResult ->
+                    val status = toolResult.content.firstOrNull()?.text ?: "Нет данных"
+                    addBotMessage(status)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            "search" -> {
+                if (args.isBlank()) {
+                    addBotMessage("❌ Укажите поисковый запрос: /git search <запрос>")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                val result = mcpClient?.callTool("git_search", mapOf("query" to args))
+                result?.onSuccess { toolResult ->
+                    val results = toolResult.content.firstOrNull()?.text ?: "Ничего не найдено"
+                    addBotMessage(results)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка поиска: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            else -> {
+                addBotMessage("🌿 Команды /git:\n" +
+                    "• /git status - статус репозитория\n" +
+                    "• /git search <запрос> - поиск в файлах проекта")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
     }
 }

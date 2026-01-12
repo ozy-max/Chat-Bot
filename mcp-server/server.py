@@ -720,6 +720,35 @@ TOOLS = [
             "properties": {},
             "required": []
         }
+    },
+    {
+        "name": "project_info",
+        "description": "Получить информацию о проекте (Git ветка, файлы, коммиты)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "git_status",
+        "description": "Получить Git статус проекта",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+        }
+    },
+    {
+        "name": "git_search",
+        "description": "Поиск в файлах проекта через git grep",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Поисковый запрос"}
+            },
+            "required": ["query"]
+        }
     }
 ]
 
@@ -796,6 +825,126 @@ def handle_tool_call(name, args):
     elif name == "get_time":
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return {"content": [{"type": "text", "text": f"🕐 Текущее время: {now}"}]}
+    
+    # ============================================
+    # PROJECT & GIT COMMANDS
+    # ============================================
+    
+    elif name == "project_info":
+        try:
+            import subprocess
+            import os
+            
+            project_path = "/Users/igorurev/FlutterProjects/ChatBot"
+            os.chdir(project_path)
+            
+            # Получить текущую ветку
+            branch = subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip()
+            
+            # Получить измененные файлы
+            status_output = subprocess.check_output(['git', 'status', '--short'], text=True)
+            changed_files = [line[3:].strip() for line in status_output.split('\n') if line.strip()]
+            
+            # Получить Kotlin файлы
+            kotlin_files = subprocess.check_output(['git', 'ls-files', '*.kt'], text=True)
+            kotlin_count = len([f for f in kotlin_files.split('\n') if f.strip()])
+            
+            # Получить последние коммиты
+            commits = subprocess.check_output(['git', 'log', '--oneline', '-n', '3'], text=True)
+            
+            text = f"""📁 Информация о проекте
+━━━━━━━━━━━━━━━━━━━━
+
+🌿 Ветка: {branch}
+📝 Изменённых файлов: {len(changed_files)}
+📄 Kotlin файлов: {kotlin_count}
+
+"""
+            
+            if changed_files:
+                text += "📝 Изменённые файлы:\n"
+                for f in changed_files[:10]:  # Максимум 10 файлов
+                    text += f"   • {f}\n"
+                text += "\n"
+            
+            text += f"📜 Последние коммиты:\n{commits}"
+            
+            return {"content": [{"type": "text", "text": text}]}
+        except Exception as e:
+            return {"content": [{"type": "text", "text": f"❌ Ошибка: {str(e)}"}], "isError": True}
+    
+    elif name == "git_status":
+        try:
+            import subprocess
+            import os
+            
+            project_path = "/Users/igorurev/FlutterProjects/ChatBot"
+            os.chdir(project_path)
+            
+            # Получить текущую ветку
+            branch = subprocess.check_output(['git', 'branch', '--show-current'], text=True).strip()
+            
+            # Получить статус
+            status = subprocess.check_output(['git', 'status', '--short'], text=True)
+            
+            # Получить последние коммиты
+            commits = subprocess.check_output(['git', 'log', '--oneline', '-n', '5'], text=True)
+            
+            text = f"""🌿 Git статус проекта
+━━━━━━━━━━━━━━━━━━━━
+
+📌 Ветка: {branch}
+
+"""
+            
+            if status.strip():
+                text += f"📝 Изменения:\n{status}\n"
+            else:
+                text += "✅ Нет изменений\n\n"
+            
+            text += f"📜 Последние коммиты:\n{commits}"
+            
+            return {"content": [{"type": "text", "text": text}]}
+        except Exception as e:
+            return {"content": [{"type": "text", "text": f"❌ Ошибка: {str(e)}"}], "isError": True}
+    
+    elif name == "git_search":
+        try:
+            import subprocess
+            import os
+            
+            query = args.get("query", "")
+            if not query:
+                return {"content": [{"type": "text", "text": "❌ Укажите поисковый запрос"}], "isError": True}
+            
+            project_path = "/Users/igorurev/FlutterProjects/ChatBot"
+            os.chdir(project_path)
+            
+            # Поиск через git grep
+            try:
+                results = subprocess.check_output(['git', 'grep', '-n', query], text=True)
+            except subprocess.CalledProcessError:
+                results = ""
+            
+            text = f"""🔍 Результаты поиска: "{query}"
+━━━━━━━━━━━━━━━━━━━━
+
+"""
+            
+            if results.strip():
+                # Ограничиваем вывод первыми 20 строками
+                all_lines = results.strip().split('\n')
+                lines = all_lines[:20]
+                text += '\n'.join(lines)
+                if len(all_lines) > 20:
+                    remaining = len(all_lines) - 20
+                    text += f"\n\n... и еще {remaining} результатов"
+            else:
+                text += "Ничего не найдено"
+            
+            return {"content": [{"type": "text", "text": text}]}
+        except Exception as e:
+            return {"content": [{"type": "text", "text": f"❌ Ошибка поиска: {str(e)}"}], "isError": True}
     
     return {"content": [{"type": "text", "text": f"❌ Неизвестный инструмент: {name}"}], "isError": True}
 

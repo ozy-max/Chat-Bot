@@ -1,0 +1,63 @@
+name: 🤖 AI PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  ai-review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Получаем всю историю для правильного diff
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: 📦 Install dependencies
+        run: |
+          pip install anthropic PyGithub gitpython sentence-transformers chromadb
+      
+      - name: 📊 Get PR information
+        id: pr-info
+        run: |
+          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+          echo "base_ref=${{ github.event.pull_request.base.ref }}" >> $GITHUB_OUTPUT
+          echo "head_ref=${{ github.event.pull_request.head.ref }}" >> $GITHUB_OUTPUT
+      
+      - name: 📝 Get PR diff
+        id: get-diff
+        run: |
+          git fetch origin ${{ steps.pr-info.outputs.base_ref }}
+          git diff origin/${{ steps.pr-info.outputs.base_ref }}...HEAD > pr_diff.txt
+          echo "Diff saved to pr_diff.txt"
+          echo "Files changed:"
+          git diff --name-only origin/${{ steps.pr-info.outputs.base_ref }}...HEAD
+      
+      - name: 🔍 Run AI PR Review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr-info.outputs.pr_number }}
+        run: |
+          python .github/scripts/ai_pr_reviewer.py
+      
+      - name: 📤 Upload review artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-review-${{ steps.pr-info.outputs.pr_number }}
+          path: |
+            pr_diff.txt
+            review_output.md
+            rag_index/
+          retention-days: 7

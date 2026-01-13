@@ -1,0 +1,6 @@
+anthropic>=0.18.0
+PyGithub>=2.1.1
+gitpython>=3.1.40
+sentence-transformers>=2.3.1
+chromadb>=0.4.22
+numpy>=1.24.0

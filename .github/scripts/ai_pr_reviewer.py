@@ -23,7 +23,7 @@ REPO_NAME = os.getenv("GITHUB_REPOSITORY", "")
 
 # Модели
 EMBEDDING_MODEL = "all-MiniLM-L6-v2"
-CLAUDE_MODEL = "claude-3-5-sonnet-20240620"  # Стабильная версия Claude 3.5 Sonnet
+CLAUDE_MODEL = "claude-3-sonnet-20240229"  # Claude 3 Sonnet (стабильная, доступна всем)
 
 
 class CodeRAG:

@@ -1245,6 +1245,13 @@ class ChatViewModel(
                         handleGitCommand(subCommand, args)
                     }
                     
+                    // Support & CRM
+                    "support" -> {
+                        val subCommand = parts.getOrNull(1)?.trim() ?: ""
+                        val args = parts.drop(2).joinToString(" ").trim()
+                        handleSupportCommand(subCommand, args)
+                    }
+                    
                     else -> {
                         addBotMessage(getHelpMessage())
                         _uiState.update { it.copy(isLoading = false) }
@@ -1792,6 +1799,22 @@ class ChatViewModel(
             🔬 АНАЛИТИКА:
             /compare <вопрос> - сравнить RAG vs No-RAG
             /filter <вопрос> - сравнить методы фильтрации
+            
+            📁 ПРОЕКТ:
+            /project info - информация о проекте
+            /project index - проиндексировать документацию
+            /git status - статус Git репозитория
+            /git search <запрос> - поиск в проекте
+            
+            🛟 ПОДДЕРЖКА ПОЛЬЗОВАТЕЛЕЙ:
+            /support - справка по командам поддержки
+            /support ask <вопрос> - задать вопрос (RAG + CRM)
+            /support ticket <проблема> - создать тикет
+            /support tickets - мои тикеты
+            /support status <ID> - детали тикета
+            /support search <запрос> - поиск тикетов
+            /support stats - статистика поддержки
+            /support user - моя информация
             
             /help - показать эту справку
         """.trimIndent()
@@ -2495,6 +2518,191 @@ class ChatViewModel(
                 addBotMessage("🌿 Команды /git:\n" +
                     "• /git status - статус репозитория\n" +
                     "• /git search <запрос> - поиск в файлах проекта")
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+    
+    /**
+     * Обработка команд поддержки
+     */
+    private suspend fun handleSupportCommand(subCommand: String, args: String) {
+        when (subCommand) {
+            "" -> {
+                // /support без аргументов - показываем справку
+                addBotMessage(
+                    "🛟 **Система поддержки пользователей**\n\n" +
+                    "**Команды:**\n" +
+                    "• /support ask <вопрос> - задать вопрос (с RAG + CRM)\n" +
+                    "• /support ticket <проблема> - создать тикет\n" +
+                    "• /support tickets - мои тикеты\n" +
+                    "• /support status <ID> - детали тикета\n" +
+                    "• /support search <запрос> - поиск тикетов\n" +
+                    "• /support stats - статистика поддержки\n" +
+                    "• /support user - моя информация\n\n" +
+                    "**Примеры:**\n" +
+                    "• `/support ask Почему не работает авторизация?`\n" +
+                    "• `/support ticket Не могу подключиться к Ollama серверу`\n" +
+                    "• `/support status TICKET-001`"
+                )
+                _uiState.update { it.copy(isLoading = false) }
+            }
+            
+            "ask" -> {
+                // /support ask <вопрос> - ответить через RAG + CRM
+                if (args.isBlank()) {
+                    addBotMessage("❌ Укажите ваш вопрос: /support ask <вопрос>")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val result = mcpClient?.callTool("support_answer", mapOf("question" to args))
+                result?.onSuccess { toolResult ->
+                    val answer = toolResult.content.firstOrNull()?.text ?: "Нет ответа"
+                    addBotMessage(answer)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "ticket" -> {
+                // /support ticket <описание> - создать новый тикет
+                if (args.isBlank()) {
+                    addBotMessage("❌ Опишите вашу проблему: /support ticket <описание>")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                // Определяем категорию и приоритет по ключевым словам
+                val category = when {
+                    args.contains("авториз", ignoreCase = true) || 
+                    args.contains("вход", ignoreCase = true) || 
+                    args.contains("ключ", ignoreCase = true) -> "authorization"
+                    args.contains("rag", ignoreCase = true) || 
+                    args.contains("документ", ignoreCase = true) || 
+                    args.contains("поиск", ignoreCase = true) -> "rag"
+                    args.contains("зависа", ignoreCase = true) || 
+                    args.contains("медленн", ignoreCase = true) || 
+                    args.contains("производит", ignoreCase = true) -> "performance"
+                    args.contains("mcp", ignoreCase = true) || 
+                    args.contains("git", ignoreCase = true) -> "mcp"
+                    args.contains("функци", ignoreCase = true) || 
+                    args.contains("добавить", ignoreCase = true) -> "feature_request"
+                    else -> "general"
+                }
+                
+                val priority = when {
+                    args.contains("срочно", ignoreCase = true) || 
+                    args.contains("важно", ignoreCase = true) || 
+                    args.contains("критич", ignoreCase = true) -> "high"
+                    args.contains("желательно", ignoreCase = true) || 
+                    args.contains("предложение", ignoreCase = true) -> "low"
+                    else -> "medium"
+                }
+                
+                val params = mapOf(
+                    "subject" to args.take(100),  // Первые 100 символов как тема
+                    "description" to args,
+                    "category" to category,
+                    "priority" to priority
+                )
+                
+                val result = mcpClient?.callTool("support_create_ticket", params)
+                result?.onSuccess { toolResult ->
+                    val message = toolResult.content.firstOrNull()?.text ?: "Тикет создан"
+                    addBotMessage(message)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка создания тикета: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "tickets" -> {
+                // /support tickets - показать все тикеты пользователя
+                val result = mcpClient?.callTool("support_user_tickets", emptyMap())
+                result?.onSuccess { toolResult ->
+                    val tickets = toolResult.content.firstOrNull()?.text ?: "Нет тикетов"
+                    addBotMessage(tickets)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "status" -> {
+                // /support status <TICKET-ID> - показать детали тикета
+                if (args.isBlank()) {
+                    addBotMessage("❌ Укажите ID тикета: /support status TICKET-001")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val result = mcpClient?.callTool("support_ticket_details", mapOf("ticket_id" to args))
+                result?.onSuccess { toolResult ->
+                    val details = toolResult.content.firstOrNull()?.text ?: "Тикет не найден"
+                    addBotMessage(details)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "search" -> {
+                // /support search <запрос> - поиск тикетов
+                if (args.isBlank()) {
+                    addBotMessage("❌ Укажите поисковый запрос: /support search <запрос>")
+                    _uiState.update { it.copy(isLoading = false) }
+                    return
+                }
+                
+                val result = mcpClient?.callTool("support_search_tickets", mapOf("query" to args))
+                result?.onSuccess { toolResult ->
+                    val results = toolResult.content.firstOrNull()?.text ?: "Ничего не найдено"
+                    addBotMessage(results)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка поиска: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "stats" -> {
+                // /support stats - статистика поддержки
+                val result = mcpClient?.callTool("support_stats", emptyMap())
+                result?.onSuccess { toolResult ->
+                    val stats = toolResult.content.firstOrNull()?.text ?: "Нет данных"
+                    addBotMessage(stats)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            "user" -> {
+                // /support user - информация о текущем пользователе
+                val result = mcpClient?.callTool("support_user_info", emptyMap())
+                result?.onSuccess { toolResult ->
+                    val userInfo = toolResult.content.firstOrNull()?.text ?: "Нет данных"
+                    addBotMessage(userInfo)
+                    _uiState.update { it.copy(isLoading = false) }
+                }?.onFailure {
+                    addBotMessage("❌ Ошибка: ${it.message}")
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+            
+            else -> {
+                // Неизвестная подкоманда - показываем справку
+                addBotMessage(
+                    "❌ Неизвестная команда: /support $subCommand\n\n" +
+                    "Используйте /support для списка команд"
+                )
                 _uiState.update { it.copy(isLoading = false) }
             }
         }

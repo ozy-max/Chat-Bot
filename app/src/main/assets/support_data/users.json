@@ -1,0 +1,59 @@
+{
+  "users": [
+    {
+      "id": "user_001",
+      "name": "Алексей Иванов",
+      "email": "alexey.ivanov@example.com",
+      "subscription": "premium",
+      "registration_date": "2025-11-15",
+      "last_login": "2026-01-14",
+      "device": "Samsung Galaxy S23",
+      "android_version": "14",
+      "app_version": "1.0.0"
+    },
+    {
+      "id": "user_002",
+      "name": "Мария Петрова",
+      "email": "maria.petrova@example.com",
+      "subscription": "basic",
+      "registration_date": "2025-12-01",
+      "last_login": "2026-01-13",
+      "device": "Google Pixel 7",
+      "android_version": "14",
+      "app_version": "1.0.0"
+    },
+    {
+      "id": "user_003",
+      "name": "Дмитрий Смирнов",
+      "email": "dmitry.smirnov@example.com",
+      "subscription": "premium",
+      "registration_date": "2025-10-20",
+      "last_login": "2026-01-14",
+      "device": "Xiaomi Mi 13",
+      "android_version": "13",
+      "app_version": "0.9.5"
+    },
+    {
+      "id": "user_004",
+      "name": "Елена Козлова",
+      "email": "elena.kozlova@example.com",
+      "subscription": "trial",
+      "registration_date": "2026-01-10",
+      "last_login": "2026-01-14",
+      "device": "OnePlus 11",
+      "android_version": "14",
+      "app_version": "1.0.0"
+    },
+    {
+      "id": "user_005",
+      "name": "Игорь Уревич",
+      "email": "igor.urev@example.com",
+      "subscription": "developer",
+      "registration_date": "2025-09-01",
+      "last_login": "2026-01-14",
+      "device": "Android Emulator",
+      "android_version": "14",
+      "app_version": "1.0.0-dev"
+    }
+  ]
+}

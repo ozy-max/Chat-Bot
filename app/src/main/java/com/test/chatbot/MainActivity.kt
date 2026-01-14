@@ -18,17 +18,28 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.test.chatbot.presentation.ChatScreen
 import com.test.chatbot.presentation.ChatViewModel
 import com.test.chatbot.presentation.ChatViewModelFactory
+import com.test.chatbot.presentation.SupportChatScreen
+import com.test.chatbot.presentation.SupportChatViewModel
+import com.test.chatbot.presentation.OnboardingScreen
 import com.test.chatbot.ui.theme.ChatBotTheme
 import com.test.chatbot.utils.DemoDocsInitializer
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import com.test.chatbot.data.UserPreferences
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 
 class MainActivity : ComponentActivity() {
     
     private lateinit var viewModel: ChatViewModel
+    private lateinit var supportViewModel: SupportChatViewModel
+    private lateinit var userPreferences: UserPreferences
     
     // Launcher для запроса разрешения на уведомления
     private val notificationPermissionLauncher = registerForActivityResult(
@@ -38,6 +49,9 @@ class MainActivity : ComponentActivity() {
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        // Инициализируем UserPreferences
+        userPreferences = UserPreferences(applicationContext)
         
         // Запрашиваем разрешение на уведомления для Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -50,6 +64,9 @@ class MainActivity : ComponentActivity() {
         // Используем Factory для передачи PreferencesRepository
         val factory = ChatViewModelFactory(applicationContext)
         viewModel = ViewModelProvider(this, factory)[ChatViewModel::class.java]
+        
+        // Создаем ViewModel для support чата
+        supportViewModel = SupportChatViewModel(applicationContext)
         
         // Загружаем демо-документы при первом запуске
         lifecycleScope.launch {
@@ -64,9 +81,15 @@ class MainActivity : ComponentActivity() {
                     color = MaterialTheme.colorScheme.background
                 ) {
                     val uiState by viewModel.uiState.collectAsState()
+                    val navController = rememberNavController()
+                    
+                    // Определяем стартовый экран в зависимости от onboarding
+                    val startDestination = remember {
+                        if (userPreferences.isOnboardingCompleted) "chat" else "onboarding"
+                    }
                     
                     // Показываем загрузку пока настройки не загружены
-                    if (!uiState.isSettingsLoaded) {
+                    if (!uiState.isSettingsLoaded && userPreferences.isOnboardingCompleted) {
                         Box(
                             modifier = Modifier.fillMaxSize(),
                             contentAlignment = Alignment.Center
@@ -74,10 +97,50 @@ class MainActivity : ComponentActivity() {
                             CircularProgressIndicator()
                         }
                     } else {
-                        ChatScreen(
-                            uiState = uiState,
-                            onUiEvent = viewModel::onUiEvent
-                        )
+                        // Navigation между экранами
+                        NavHost(
+                            navController = navController,
+                            startDestination = startDestination
+                        ) {
+                            // Экран онбординга (первый запуск)
+                            composable("onboarding") {
+                                OnboardingScreen(
+                                    onComplete = { firstName, lastName, email ->
+                                        // Сохраняем данные пользователя
+                                        userPreferences.firstName = firstName
+                                        userPreferences.lastName = lastName
+                                        userPreferences.email = email
+                                        userPreferences.isOnboardingCompleted = true
+                                        
+                                        // Переходим на главный экран
+                                        navController.navigate("chat") {
+                                            popUpTo("onboarding") { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+                            
+                            // Главный экран чата
+                            composable("chat") {
+                                ChatScreen(
+                                    uiState = uiState,
+                                    onUiEvent = viewModel::onUiEvent,
+                                    onNavigateToSupport = {
+                                        navController.navigate("support_chat")
+                                    }
+                                )
+                            }
+                            
+                            // Экран чата поддержки
+                            composable("support_chat") {
+                                SupportChatScreen(
+                                    viewModel = supportViewModel,
+                                    onNavigateBack = {
+                                        navController.popBackStack()
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
             }

@@ -63,6 +63,9 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)
     
+    // Navigation Compose
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    
     // Retrofit для HTTP запросов
     implementation(libs.retrofit)
     implementation(libs.retrofit.gson)

@@ -641,6 +641,193 @@ def get_real_weather(city):
 ⚠️ Примечание: Реальное API недоступно ({str(e)[:50]})"""
 
 # ============================================
+# SUPPORT FUNCTIONS
+# ============================================
+
+# Пути к данным (относительно MCP сервера или абсолютные)
+SUPPORT_DATA_PATH = "/Users/igorurev/FlutterProjects/ChatBot/app/src/main/assets/support_data"
+PRODUCT_DOCS_PATH = "/Users/igorurev/FlutterProjects/ChatBot/app/src/main/assets/product_docs"
+
+# Месяцы на русском
+RUSSIAN_MONTHS = {
+    1: "января", 2: "февраля", 3: "марта", 4: "апреля",
+    5: "мая", 6: "июня", 7: "июля", 8: "августа",
+    9: "сентября", 10: "октября", 11: "ноября", 12: "декабря"
+}
+
+def format_date_russian(iso_date_string):
+    """Форматировать дату в формат 'dd месяц YYYY'"""
+    try:
+        # Парсим ISO дату
+        if isinstance(iso_date_string, str):
+            # Убираем Z в конце если есть
+            date_str = iso_date_string.replace('Z', '+00:00')
+            dt = datetime.fromisoformat(date_str)
+        else:
+            dt = iso_date_string
+        
+        # Форматируем: "15 января 2026"
+        day = dt.day
+        month = RUSSIAN_MONTHS[dt.month]
+        year = dt.year
+        
+        return f"{day} {month} {year}"
+    except Exception as e:
+        # Если не удалось распарсить, возвращаем как есть
+        return iso_date_string[:10] if isinstance(iso_date_string, str) else str(iso_date_string)
+
+def load_users():
+    """Загрузить данные пользователей"""
+    try:
+        with open(f"{SUPPORT_DATA_PATH}/users.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("users", [])
+    except Exception as e:
+        print(f"❌ Ошибка загрузки users.json: {e}")
+        return []
+
+def load_tickets():
+    """Загрузить данные тикетов"""
+    try:
+        with open(f"{SUPPORT_DATA_PATH}/tickets.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+            return data.get("tickets", [])
+    except Exception as e:
+        print(f"❌ Ошибка загрузки tickets.json: {e}")
+        return []
+
+def save_tickets(tickets):
+    """Сохранить данные тикетов"""
+    try:
+        with open(f"{SUPPORT_DATA_PATH}/tickets.json", "w", encoding="utf-8") as f:
+            json.dump({"tickets": tickets}, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        print(f"❌ Ошибка сохранения tickets.json: {e}")
+        return False
+
+def load_faq():
+    """Загрузить FAQ"""
+    try:
+        with open(f"{PRODUCT_DOCS_PATH}/faq_common.txt", "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        print(f"❌ Ошибка загрузки FAQ: {e}")
+        return ""
+
+def search_faq(question):
+    """Простой поиск в FAQ по ключевым словам"""
+    faq = load_faq()
+    if not faq:
+        return "❌ FAQ не найден"
+    
+    # Разбиваем FAQ на блоки Q&A
+    blocks = faq.split("\n\nQ:")
+    
+    # Ключевые слова из вопроса
+    keywords = question.lower().split()
+    
+    best_match = None
+    best_score = 0
+    
+    for block in blocks:
+        if not block.strip():
+            continue
+        
+        block_lower = block.lower()
+        score = sum(1 for keyword in keywords if keyword in block_lower)
+        
+        if score > best_score:
+            best_score = score
+            best_match = block
+    
+    if best_match and best_score > 0:
+        # Форматируем ответ
+        if not best_match.startswith("Q:"):
+            best_match = "Q:" + best_match
+        return best_match.strip()
+    
+    return None
+
+def get_user_info(user_id):
+    """Получить информацию о пользователе"""
+    users = load_users()
+    for user in users:
+        if user.get("id") == user_id:
+            return user
+    return None
+
+def get_user_tickets(user_id, status_filter=None):
+    """Получить тикеты пользователя"""
+    tickets = load_tickets()
+    user_tickets = [t for t in tickets if t.get("user_id") == user_id]
+    
+    if status_filter:
+        user_tickets = [t for t in user_tickets if t.get("status") == status_filter]
+    
+    return user_tickets
+
+def get_ticket_by_id(ticket_id):
+    """Получить тикет по ID"""
+    tickets = load_tickets()
+    for ticket in tickets:
+        if ticket.get("id") == ticket_id:
+            return ticket
+    return None
+
+def create_support_ticket(user_id, subject, description, category="other", priority="medium"):
+    """Создать новый тикет"""
+    tickets = load_tickets()
+    
+    # Генерируем ID
+    ticket_count = len(tickets) + 1
+    new_id = f"TICKET-{ticket_count:03d}"
+    
+    # Создаем тикет
+    now = datetime.now().isoformat() + "Z"
+    new_ticket = {
+        "id": new_id,
+        "user_id": user_id,
+        "status": "open",
+        "priority": priority,
+        "category": category,
+        "subject": subject,
+        "description": description,
+        "created_at": now,
+        "updated_at": now,
+        "assigned_to": "support_team",
+        "messages": []
+    }
+    
+    tickets.append(new_ticket)
+    save_tickets(tickets)
+    
+    return new_ticket
+
+def get_support_stats():
+    """Статистика по тикетам"""
+    tickets = load_tickets()
+    
+    total = len(tickets)
+    open_tickets = len([t for t in tickets if t.get("status") == "open"])
+    in_progress = len([t for t in tickets if t.get("status") == "in_progress"])
+    closed = len([t for t in tickets if t.get("status") == "closed"])
+    
+    # Статистика по категориям
+    categories = {}
+    for ticket in tickets:
+        cat = ticket.get("category", "other")
+        categories[cat] = categories.get(cat, 0) + 1
+    
+    return {
+        "total": total,
+        "open": open_tickets,
+        "in_progress": in_progress,
+        "closed": closed,
+        "categories": categories
+    }
+
+# ============================================
 # MCP TOOLS
 # ============================================
 
@@ -748,6 +935,79 @@ TOOLS = [
                 "query": {"type": "string", "description": "Поисковый запрос"}
             },
             "required": ["query"]
+        }
+    },
+    {
+        "name": "support_answer",
+        "description": "Ответить на вопрос пользователя о продукте используя FAQ и контекст тикетов",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "Вопрос пользователя"},
+                "user_id": {"type": "string", "description": "ID пользователя"},
+                "user_name": {"type": "string", "description": "Имя пользователя"},
+                "device_model": {"type": "string", "description": "Модель устройства"},
+                "android_version": {"type": "string", "description": "Версия Android"}
+            },
+            "required": ["question"]
+        }
+    },
+    {
+        "name": "support_user_info",
+        "description": "Получить информацию о пользователе",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "description": "ID пользователя"}
+            },
+            "required": ["user_id"]
+        }
+    },
+    {
+        "name": "support_tickets",
+        "description": "Получить список тикетов пользователя",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "description": "ID пользователя"},
+                "status": {"type": "string", "description": "Фильтр по статусу: open, in_progress, closed"}
+            },
+            "required": ["user_id"]
+        }
+    },
+    {
+        "name": "support_ticket_details",
+        "description": "Получить детали конкретного тикета",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "ticket_id": {"type": "string", "description": "ID тикета"}
+            },
+            "required": ["ticket_id"]
+        }
+    },
+    {
+        "name": "support_create_ticket",
+        "description": "Создать новый тикет поддержки",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "user_id": {"type": "string", "description": "ID пользователя"},
+                "subject": {"type": "string", "description": "Тема тикета"},
+                "description": {"type": "string", "description": "Описание проблемы"},
+                "category": {"type": "string", "description": "Категория: authorization, rag, performance, mcp, feature_request, other"},
+                "priority": {"type": "string", "description": "Приоритет: low, medium, high"}
+            },
+            "required": ["user_id", "subject", "description"]
+        }
+    },
+    {
+        "name": "support_stats",
+        "description": "Получить статистику по тикетам поддержки",
+        "inputSchema": {
+            "type": "object",
+            "properties": {},
+            "required": []
         }
     }
 ]
@@ -945,6 +1205,185 @@ def handle_tool_call(name, args):
             return {"content": [{"type": "text", "text": text}]}
         except Exception as e:
             return {"content": [{"type": "text", "text": f"❌ Ошибка поиска: {str(e)}"}], "isError": True}
+    
+    # ============================================
+    # SUPPORT COMMANDS
+    # ============================================
+    
+    elif name == "support_answer":
+        question = args.get("question", "")
+        user_id = args.get("user_id", "user_001")
+        user_name = args.get("user_name", "Пользователь")
+        device_model = args.get("device_model", "Unknown Device")
+        android_version = args.get("android_version", "Unknown")
+        
+        if not question:
+            return {"content": [{"type": "text", "text": "❌ Укажите вопрос"}], "isError": True}
+        
+        # Получаем открытые тикеты пользователя (если есть в системе)
+        open_tickets = get_user_tickets(user_id, "open")
+        
+        # Ищем ответ в FAQ
+        faq_answer = search_faq(question)
+        
+        # Формируем ответ с динамическими данными
+        text = f"🛟 Служба поддержки\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        text += f"👤 Пользователь: {user_name}\n"
+        text += f"📱 Устройство: {device_model} (Android {android_version})\n"
+        text += f"🆔 ID: {user_id}\n\n"
+        
+        if open_tickets:
+            text += f"📋 У вас есть {len(open_tickets)} открытых тикетов:\n"
+            for ticket in open_tickets[:2]:
+                text += f"  • {ticket['id']}: {ticket['subject']}\n"
+            text += "\n"
+        
+        text += f"💬 Вопрос: {question}\n\n"
+        
+        if faq_answer:
+            text += f"📚 Ответ из FAQ:\n\n{faq_answer}\n\n"
+            text += "✅ Надеюсь, это помогло! Если проблема сохраняется, используйте /ticket для создания тикета."
+        else:
+            text += "❓ К сожалению, точного ответа в FAQ нет.\n\n"
+            text += "Попробуйте:\n"
+            text += "• Уточнить вопрос более конкретно\n"
+            text += "• Использовать /ticket для создания тикета поддержки\n"
+            text += "• Проверить раздел Troubleshooting в документации"
+        
+        return {"content": [{"type": "text", "text": text}]}
+    
+    elif name == "support_user_info":
+        user_id = args.get("user_id", "")
+        if not user_id:
+            return {"content": [{"type": "text", "text": "❌ Укажите user_id"}], "isError": True}
+        
+        user = get_user_info(user_id)
+        if not user:
+            return {"content": [{"type": "text", "text": f"❌ Пользователь {user_id} не найден"}], "isError": True}
+        
+        text = f"""👤 Информация о пользователе
+━━━━━━━━━━━━━━━━━━━━
+
+ID: {user['id']}
+Имя: {user['name']}
+Email: {user['email']}
+Подписка: {user['subscription']}
+Регистрация: {user['registration_date']}
+Последний вход: {user['last_login']}
+Устройство: {user['device']}
+Android: {user['android_version']}
+Версия приложения: {user['app_version']}"""
+        
+        return {"content": [{"type": "text", "text": text}]}
+    
+    elif name == "support_tickets":
+        user_id = args.get("user_id", "")
+        status_filter = args.get("status")
+        
+        if not user_id:
+            return {"content": [{"type": "text", "text": "❌ Укажите user_id"}], "isError": True}
+        
+        tickets = get_user_tickets(user_id, status_filter)
+        
+        if not tickets:
+            status_msg = f" со статусом '{status_filter}'" if status_filter else ""
+            return {"content": [{"type": "text", "text": f"📋 У пользователя нет тикетов{status_msg}"}]}
+        
+        text = f"📋 Тикеты пользователя ({len(tickets)}):\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        
+        for ticket in tickets:
+            status_icon = {"open": "🟢", "in_progress": "🟡", "closed": "⚫"}.get(ticket['status'], "⚪")
+            priority_icon = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(ticket['priority'], "⚪")
+            
+            text += f"{status_icon} {ticket['id']}: {ticket['subject']}\n"
+            text += f"   Категория: {ticket['category']}\n"
+            text += f"   Приоритет: {priority_icon} {ticket['priority']}\n"
+            text += f"   Создан: {format_date_russian(ticket['created_at'])}\n\n"
+        
+        return {"content": [{"type": "text", "text": text}]}
+    
+    elif name == "support_ticket_details":
+        ticket_id = args.get("ticket_id", "")
+        if not ticket_id:
+            return {"content": [{"type": "text", "text": "❌ Укажите ticket_id"}], "isError": True}
+        
+        ticket = get_ticket_by_id(ticket_id)
+        if not ticket:
+            return {"content": [{"type": "text", "text": f"❌ Тикет {ticket_id} не найден"}], "isError": True}
+        
+        status_icon = {"open": "🟢", "in_progress": "🟡", "closed": "⚫"}.get(ticket['status'], "⚪")
+        
+        text = f"""🎫 Детали тикета {ticket['id']}
+━━━━━━━━━━━━━━━━━━━━
+
+Тема: {ticket['subject']}
+Статус: {status_icon} {ticket['status']}
+Приоритет: {ticket['priority']}
+Категория: {ticket['category']}
+Создан: {format_date_russian(ticket['created_at'])}
+Обновлен: {format_date_russian(ticket['updated_at'])}
+Назначен: {ticket['assigned_to']}
+
+Описание:
+{ticket['description']}
+"""
+        
+        if ticket.get('messages'):
+            text += f"\n💬 Сообщения ({len(ticket['messages'])}):\n"
+            for msg in ticket['messages']:
+                sender = "👤" if msg['from'] == 'user' else "🛟"
+                text += f"\n{sender} {msg['from']} ({format_date_russian(msg['timestamp'])}):\n{msg['text']}\n"
+        
+        if ticket.get('resolution'):
+            text += f"\n✅ Решение:\n{ticket['resolution']}"
+        
+        return {"content": [{"type": "text", "text": text}]}
+    
+    elif name == "support_create_ticket":
+        user_id = args.get("user_id", "")
+        subject = args.get("subject", "")
+        description = args.get("description", "")
+        category = args.get("category", "other")
+        priority = args.get("priority", "medium")
+        
+        if not user_id or not subject or not description:
+            return {"content": [{"type": "text", "text": "❌ Укажите user_id, subject и description"}], "isError": True}
+        
+        # Создаем тикет без проверки существования пользователя
+        # Это позволяет работать с динамическими user_id
+        new_ticket = create_support_ticket(user_id, subject, description, category, priority)
+        
+        text = f"""✅ Тикет успешно создан!
+━━━━━━━━━━━━━━━━━━━━
+
+🎫 ID: {new_ticket['id']}
+Тема: {new_ticket['subject']}
+Категория: {new_ticket['category']}
+Приоритет: {new_ticket['priority']}
+Статус: {new_ticket['status']}
+
+Ваш тикет принят в обработку.
+Ожидаемое время ответа: 24 часа."""
+        
+        return {"content": [{"type": "text", "text": text}]}
+    
+    elif name == "support_stats":
+        stats = get_support_stats()
+        
+        text = f"""📊 Статистика поддержки
+━━━━━━━━━━━━━━━━━━━━
+
+Всего тикетов: {stats['total']}
+🟢 Открыто: {stats['open']}
+🟡 В работе: {stats['in_progress']}
+⚫ Закрыто: {stats['closed']}
+
+📂 По категориям:"""
+        
+        for cat, count in stats['categories'].items():
+            text += f"\n  • {cat}: {count}"
+        
+        return {"content": [{"type": "text", "text": text}]}
     
     return {"content": [{"type": "text", "text": f"❌ Неизвестный инструмент: {name}"}], "isError": True}
 

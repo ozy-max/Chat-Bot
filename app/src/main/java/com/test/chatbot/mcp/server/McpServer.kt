@@ -20,6 +20,7 @@ import com.test.chatbot.mcp.server.FileManagerService
 import com.test.chatbot.mcp.server.ScriptAutomationService
 import com.test.chatbot.mcp.server.TermuxService
 import com.test.chatbot.mcp.server.AdbWifiService
+import com.test.chatbot.mcp.server.SupportService
 
 /**
  * Встроенный MCP (Model Context Protocol) сервер на Kotlin
@@ -58,6 +59,9 @@ class McpServer(
     
     // Project integration services
     private var projectDocsService: ProjectDocsService? = null
+    
+    // Support service (CRM)
+    private var supportService: SupportService? = null
     
     // Ollama configuration
     private var ollamaUrl: String = ""
@@ -132,6 +136,10 @@ class McpServer(
                     // Создаём ProjectDocsService для RAG по проекту
                     projectDocsService = ProjectDocsService(context, documentIndexService, ollamaRAGService!!)
                     Log.i(TAG, "✅ ProjectDocsService инициализирован")
+                    
+                    // Создаём SupportService для работы с поддержкой
+                    supportService = SupportService(context, ollamaRAGService!!)
+                    Log.i(TAG, "✅ SupportService инициализирован")
                 } else {
                     Log.w(TAG, "⚠️ Ollama недоступна, используется локальный режим")
                     // Создаём DocumentIndexService с локальными эмбеддингами
@@ -954,6 +962,118 @@ class McpServer(
                         ),
                         "required" to listOf("query")
                     )
+                ),
+                // ============================================
+                // SUPPORT & CRM TOOLS
+                // ============================================
+                mapOf(
+                    "name" to "support_user_info",
+                    "description" to "Получить информацию о пользователе из CRM",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "user_id" to mapOf(
+                                "type" to "string",
+                                "description" to "ID пользователя (опционально, по умолчанию текущий)"
+                            )
+                        ),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "support_user_tickets",
+                    "description" to "Получить тикеты пользователя",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "user_id" to mapOf(
+                                "type" to "string",
+                                "description" to "ID пользователя (опционально)"
+                            )
+                        ),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
+                    "name" to "support_ticket_details",
+                    "description" to "Получить детали конкретного тикета",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "ticket_id" to mapOf(
+                                "type" to "string",
+                                "description" to "ID тикета"
+                            )
+                        ),
+                        "required" to listOf("ticket_id")
+                    )
+                ),
+                mapOf(
+                    "name" to "support_create_ticket",
+                    "description" to "Создать новый тикет в поддержку",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "subject" to mapOf(
+                                "type" to "string",
+                                "description" to "Тема тикета"
+                            ),
+                            "description" to mapOf(
+                                "type" to "string",
+                                "description" to "Описание проблемы"
+                            ),
+                            "category" to mapOf(
+                                "type" to "string",
+                                "description" to "Категория (authorization, rag, performance, mcp, feature_request, general)"
+                            ),
+                            "priority" to mapOf(
+                                "type" to "string",
+                                "description" to "Приоритет (low, medium, high)"
+                            )
+                        ),
+                        "required" to listOf("subject", "description")
+                    )
+                ),
+                mapOf(
+                    "name" to "support_answer",
+                    "description" to "Ответить на вопрос пользователя с использованием RAG и контекста CRM",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "question" to mapOf(
+                                "type" to "string",
+                                "description" to "Вопрос пользователя"
+                            ),
+                            "user_id" to mapOf(
+                                "type" to "string",
+                                "description" to "ID пользователя (опционально)"
+                            )
+                        ),
+                        "required" to listOf("question")
+                    )
+                ),
+                mapOf(
+                    "name" to "support_search_tickets",
+                    "description" to "Поиск тикетов по ключевым словам",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "query" to mapOf(
+                                "type" to "string",
+                                "description" to "Поисковый запрос"
+                            )
+                        ),
+                        "required" to listOf("query")
+                    )
+                ),
+                mapOf(
+                    "name" to "support_stats",
+                    "description" to "Получить статистику службы поддержки",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf<String, Any>(),
+                        "required" to emptyList<String>()
+                    )
                 )
             )
         )
@@ -1026,6 +1146,14 @@ class McpServer(
             "project_index" -> runBlocking { indexProjectDocs() }
             "project_help" -> runBlocking { getProjectHelp(arguments) }
             "project_search_docs" -> runBlocking { searchProjectDocs(arguments) }
+            // Support & CRM Tools
+            "support_user_info" -> runBlocking { getUserInfoTool(arguments) }
+            "support_user_tickets" -> runBlocking { getUserTicketsTool(arguments) }
+            "support_ticket_details" -> runBlocking { getTicketDetailsTool(arguments) }
+            "support_create_ticket" -> runBlocking { createTicketTool(arguments) }
+            "support_answer" -> runBlocking { answerSupportQuestion(arguments) }
+            "support_search_tickets" -> runBlocking { searchTicketsTool(arguments) }
+            "support_stats" -> runBlocking { getSupportStatsTool() }
             else -> mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to "Unknown tool: $name")
@@ -2452,6 +2580,203 @@ class McpServer(
             mapOf(
                 "content" to listOf(
                     mapOf("type" to "text", "text" to results)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    // ==================== Support & CRM Tools ====================
+    
+    /**
+     * Получить информацию о пользователе
+     */
+    private suspend fun getUserInfoTool(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            if (supportService == null) {
+                return createErrorMessage(
+                    "Служба поддержки недоступна. Ollama не подключена.\n\n" +
+                    "Используйте команду для настройки Ollama"
+                )
+            }
+            
+            val userId = arguments?.get("user_id")?.asString
+            val result = if (userId.isNullOrBlank()) {
+                supportService!!.getUserInfo()
+            } else {
+                supportService!!.getUserInfo(userId)
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Получить тикеты пользователя
+     */
+    private suspend fun getUserTicketsTool(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            if (supportService == null) {
+                return createErrorMessage("Служба поддержки недоступна")
+            }
+            
+            val userId = arguments?.get("user_id")?.asString
+            val result = if (userId.isNullOrBlank()) {
+                supportService!!.getUserTickets()
+            } else {
+                supportService!!.getUserTickets(userId)
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Получить детали тикета
+     */
+    private suspend fun getTicketDetailsTool(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            if (supportService == null) {
+                return createErrorMessage("Служба поддержки недоступна")
+            }
+            
+            val ticketId = arguments?.get("ticket_id")?.asString
+            if (ticketId.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать ticket_id")
+            }
+            
+            val result = supportService!!.getTicketDetails(ticketId)
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Создать новый тикет
+     */
+    private suspend fun createTicketTool(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            if (supportService == null) {
+                return createErrorMessage("Служба поддержки недоступна")
+            }
+            
+            val subject = arguments?.get("subject")?.asString
+            val description = arguments?.get("description")?.asString
+            val category = arguments?.get("category")?.asString ?: "general"
+            val priority = arguments?.get("priority")?.asString ?: "medium"
+            
+            if (subject.isNullOrBlank() || description.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать subject и description")
+            }
+            
+            val result = supportService!!.createTicket(
+                subject = subject,
+                description = description,
+                category = category,
+                priority = priority
+            )
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Ответить на вопрос поддержки с RAG + CRM
+     */
+    private suspend fun answerSupportQuestion(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            if (supportService == null) {
+                return createErrorMessage("Служба поддержки недоступна")
+            }
+            
+            val question = arguments?.get("question")?.asString
+            val userId = arguments?.get("user_id")?.asString
+            
+            if (question.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать вопрос")
+            }
+            
+            val result = if (userId.isNullOrBlank()) {
+                supportService!!.answerSupportQuestion(question)
+            } else {
+                supportService!!.answerSupportQuestion(question, userId)
+            }
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Поиск тикетов
+     */
+    private suspend fun searchTicketsTool(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            if (supportService == null) {
+                return createErrorMessage("Служба поддержки недоступна")
+            }
+            
+            val query = arguments?.get("query")?.asString
+            if (query.isNullOrBlank()) {
+                return createErrorMessage("Необходимо указать поисковый запрос")
+            }
+            
+            val result = supportService!!.searchTickets(query)
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
+                )
+            )
+        } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Статистика поддержки
+     */
+    private suspend fun getSupportStatsTool(): Map<String, Any> {
+        return try {
+            if (supportService == null) {
+                return createErrorMessage("Служба поддержки недоступна")
+            }
+            
+            val result = supportService!!.getSupportStats()
+            
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to result)
                 )
             )
         } catch (e: Exception) {

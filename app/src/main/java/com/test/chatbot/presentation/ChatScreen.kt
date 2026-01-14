@@ -16,7 +16,9 @@ import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.*
+import androidx.compose.material3.FabPosition
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -45,6 +47,7 @@ import androidx.lifecycle.LifecycleEventObserver
 fun ChatScreen(
     uiState: ChatUiState,
     onUiEvent: (ChatUiEvents) -> Unit,
+    onNavigateToSupport: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var messageText by remember { mutableStateOf("") }
@@ -314,7 +317,24 @@ fun ChatScreen(
                     )
                 }
             }
-        }
+        },
+        floatingActionButton = {
+            // FAB для перехода в чат поддержки
+            FloatingActionButton(
+                onClick = onNavigateToSupport,
+                containerColor = AccentYellow,
+                contentColor = PureBlack,
+                modifier = Modifier
+                    .padding(bottom = 80.dp) // Над кнопкой отправки
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SupportAgent,
+                    contentDescription = "Служба поддержки",
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        },
+        floatingActionButtonPosition = FabPosition.End
     ) { paddingValues ->
         Column(
             modifier = modifier

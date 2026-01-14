@@ -1,0 +1,169 @@
+{
+  "tickets": [
+    {
+      "id": "TICKET-001",
+      "user_id": "user_001",
+      "status": "open",
+      "priority": "high",
+      "category": "authorization",
+      "subject": "Не работает авторизация через YandexGPT",
+      "description": "После обновления до версии 1.0.0 не могу авторизоваться. Ввожу API ключ, но получаю ошибку Unauthorized.",
+      "created_at": "2026-01-14T09:30:00Z",
+      "updated_at": "2026-01-14T10:15:00Z",
+      "assigned_to": "support_team",
+      "messages": [
+        {
+          "from": "user",
+          "text": "Здравствуйте! После обновления приложения не работает авторизация. Что делать?",
+          "timestamp": "2026-01-14T09:30:00Z"
+        },
+        {
+          "from": "support",
+          "text": "Здравствуйте! Проверьте пожалуйста правильность API ключа и Folder ID. Также убедитесь что ключ не истек.",
+          "timestamp": "2026-01-14T10:15:00Z"
+        }
+      ]
+    },
+    {
+      "id": "TICKET-002",
+      "user_id": "user_002",
+      "status": "closed",
+      "priority": "medium",
+      "category": "rag",
+      "subject": "RAG не находит документы",
+      "description": "Использую команду для поиска в документации, но система говорит что ничего не найдено.",
+      "created_at": "2026-01-13T14:20:00Z",
+      "updated_at": "2026-01-13T16:45:00Z",
+      "assigned_to": "technical_team",
+      "resolution": "Проблема решена после переиндексации документов командой /project_index",
+      "messages": [
+        {
+          "from": "user",
+          "text": "RAG поиск не работает, что делать?",
+          "timestamp": "2026-01-13T14:20:00Z"
+        },
+        {
+          "from": "support",
+          "text": "Попробуйте выполнить команду /project_index для индексации документов.",
+          "timestamp": "2026-01-13T15:00:00Z"
+        },
+        {
+          "from": "user",
+          "text": "Спасибо, помогло!",
+          "timestamp": "2026-01-13T16:45:00Z"
+        }
+      ]
+    },
+    {
+      "id": "TICKET-003",
+      "user_id": "user_003",
+      "status": "in_progress",
+      "priority": "high",
+      "category": "performance",
+      "subject": "Приложение зависает при больших запросах",
+      "description": "При отправке длинных вопросов приложение зависает на 2-3 минуты.",
+      "created_at": "2026-01-14T08:00:00Z",
+      "updated_at": "2026-01-14T11:30:00Z",
+      "assigned_to": "technical_team",
+      "messages": [
+        {
+          "from": "user",
+          "text": "Приложение постоянно зависает когда задаю длинные вопросы.",
+          "timestamp": "2026-01-14T08:00:00Z"
+        },
+        {
+          "from": "support",
+          "text": "Проверяем проблему. Какая у вас модель устройства и версия Android?",
+          "timestamp": "2026-01-14T09:00:00Z"
+        },
+        {
+          "from": "user",
+          "text": "Xiaomi Mi 13, Android 13. Версия приложения 0.9.5",
+          "timestamp": "2026-01-14T10:00:00Z"
+        },
+        {
+          "from": "support",
+          "text": "Рекомендуем обновиться до версии 1.0.0, в ней исправлены проблемы с производительностью.",
+          "timestamp": "2026-01-14T11:30:00Z"
+        }
+      ]
+    },
+    {
+      "id": "TICKET-004",
+      "user_id": "user_004",
+      "status": "open",
+      "priority": "low",
+      "category": "feature_request",
+      "subject": "Добавить поддержку темной темы",
+      "description": "Хотелось бы иметь возможность переключения на темную тему интерфейса.",
+      "created_at": "2026-01-14T12:00:00Z",
+      "updated_at": "2026-01-14T12:00:00Z",
+      "assigned_to": "product_team",
+      "messages": [
+        {
+          "from": "user",
+          "text": "Планируется ли добавление темной темы?",
+          "timestamp": "2026-01-14T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "id": "TICKET-005",
+      "user_id": "user_005",
+      "status": "open",
+      "priority": "medium",
+      "category": "mcp",
+      "subject": "Git команды не работают на реальном устройстве",
+      "description": "MCP Git интеграция работает на эмуляторе, но не на реальном устройстве.",
+      "created_at": "2026-01-14T13:30:00Z",
+      "updated_at": "2026-01-14T13:30:00Z",
+      "assigned_to": "technical_team",
+      "messages": [
+        {
+          "from": "user",
+          "text": "Команды /git status и /project_info не работают когда я тестирую на реальном телефоне.",
+          "timestamp": "2026-01-14T13:30:00Z"
+        }
+      ]
+    },
+    {
+      "id": "TICKET-006",
+      "user_id": "user_382508",
+      "status": "open",
+      "priority": "high",
+      "category": "authorization",
+      "subject": "СРОЧНО! Не работает авторизация",
+      "description": "СРОЧНО! Не работает авторизация",
+      "created_at": "2026-01-15T00:47:52.390128Z",
+      "updated_at": "2026-01-15T00:47:52.390128Z",
+      "assigned_to": "support_team",
+      "messages": []
+    },
+    {
+      "id": "TICKET-007",
+      "user_id": "user_644846",
+      "status": "open",
+      "priority": "high",
+      "category": "general",
+      "subject": "СРОЧНО! Тестирование форматирования дат",
+      "description": "СРОЧНО! Тестирование форматирования дат",
+      "created_at": "2026-01-15T00:52:27.191173Z",
+      "updated_at": "2026-01-15T00:52:27.191173Z",
+      "assigned_to": "support_team",
+      "messages": []
+    },
+    {
+      "id": "TICKET-008",
+      "user_id": "user_644846",
+      "status": "open",
+      "priority": "medium",
+      "category": "general",
+      "subject": "Тестирование списка тикетов",
+      "description": "Тестирование списка тикетов",
+      "created_at": "2026-01-15T01:00:13.508338Z",
+      "updated_at": "2026-01-15T01:00:13.508338Z",
+      "assigned_to": "support_team",
+      "messages": []
+    }
+  ]
+}

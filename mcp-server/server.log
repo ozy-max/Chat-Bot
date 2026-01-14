@@ -1,0 +1,42 @@
+✅ База данных инициализирована
+⏰ Следующая сводка: 2026-01-15 18:00:00 (через 17.5 часов)
+⏰ Планировщик запущен: ежедневная сводка в 18:00
+   Загружено 0 существующих задач
+⏰ Следующая синхронизация через 30 минут
+🔄 Периодическая синхронизация запущена: каждые 30 минут
+
+🚀 MCP Reminder Agent Server запущен!
+
+📱 Для подключения с Android используйте:
+   http://192.168.0.198:3000/mcp
+
+🔧 Доступные инструменты:
+   - get_weather: Получить текущую погоду для города
+   - add_task: Добавить новую задачу в список
+   - list_tasks: Получить список задач
+   - complete_task: Отметить задачу как выполненную
+   - get_summary: Получить сводку задач за сегодня
+   - sync_todoist: Синхронизировать задачи с Todoist прямо сейчас
+   - get_time: Получить текущее время
+   - project_info: Получить информацию о проекте (Git ветка, файлы, коммиты)
+   - git_status: Получить Git статус проекта
+   - git_search: Поиск в файлах проекта через git grep
+   - support_answer: Ответить на вопрос пользователя о продукте используя FAQ и контекст тикетов
+   - support_user_info: Получить информацию о пользователе
+   - support_tickets: Получить список тикетов пользователя
+   - support_ticket_details: Получить детали конкретного тикета
+   - support_create_ticket: Создать новый тикет поддержки
+   - support_stats: Получить статистику по тикетам поддержки
+
+Нажмите Ctrl+C для остановки
+
+Traceback (most recent call last):
+  File "/Users/igorurev/FlutterProjects/ChatBot/mcp-server/server.py", line 1548, in <module>
+    server = HTTPServer(("0.0.0.0", PORT), MCPHandler)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 452, in __init__
+    self.server_bind()
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/http/server.py", line 138, in server_bind
+    socketserver.TCPServer.server_bind(self)
+  File "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/lib/python3.9/socketserver.py", line 466, in server_bind
+    self.socket.bind(self.server_address)
+OSError: [Errno 48] Address already in use

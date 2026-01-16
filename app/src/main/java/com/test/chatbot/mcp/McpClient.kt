@@ -211,7 +211,7 @@ class HttpTransport(private val serverUrl: String) : McpTransport {
     
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(120, TimeUnit.SECONDS) // Увеличено для долгих операций (сканирование)
         .writeTimeout(30, TimeUnit.SECONDS)
         .build()
     

@@ -938,6 +938,53 @@ TOOLS = [
         }
     },
     {
+        "name": "github_list_kotlin_files",
+        "description": "Получить список всех .kt файлов из GitHub репозитория",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_url": {"type": "string", "description": "URL репозитория (https://github.com/user/repo)"},
+                "branch": {"type": "string", "description": "Ветка (по умолчанию: main)"}
+            },
+            "required": ["repo_url"]
+        }
+    },
+    {
+        "name": "github_get_file_content",
+        "description": "Получить содержимое файла из GitHub репозитория",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "repo_url": {"type": "string", "description": "URL репозитория"},
+                "file_path": {"type": "string", "description": "Путь к файлу (app/src/main/java/MainActivity.kt)"},
+                "branch": {"type": "string", "description": "Ветка (по умолчанию: main)"}
+            },
+            "required": ["repo_url", "file_path"]
+        }
+    },
+    {
+        "name": "local_list_kotlin_files",
+        "description": "Получить список всех .kt файлов из локальной директории проекта",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "project_path": {"type": "string", "description": "Путь к проекту (по умолчанию: /Users/igorurev/FlutterProjects/ChatBot)"}
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "local_get_file_content",
+        "description": "Получить содержимое локального файла",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "Полный путь к файлу"}
+            },
+            "required": ["file_path"]
+        }
+    },
+    {
         "name": "support_answer",
         "description": "Ответить на вопрос пользователя о продукте используя FAQ и контекст тикетов",
         "inputSchema": {
@@ -1205,6 +1252,199 @@ def handle_tool_call(name, args):
             return {"content": [{"type": "text", "text": text}]}
         except Exception as e:
             return {"content": [{"type": "text", "text": f"❌ Ошибка поиска: {str(e)}"}], "isError": True}
+    
+    # ============================================
+    # GITHUB INTEGRATION
+    # ============================================
+    
+    elif name == "github_list_kotlin_files":
+        try:
+            from github import Github
+            import os
+            
+            repo_url = args.get("repo_url", "")
+            branch = args.get("branch", "main")
+            
+            if not repo_url:
+                return {"content": [{"type": "text", "text": "❌ Укажите URL репозитория"}], "isError": True}
+            
+            # Парсим repo_url (https://github.com/user/repo)
+            parts = repo_url.rstrip('/').split('/')
+            if len(parts) < 2:
+                return {"content": [{"type": "text", "text": "❌ Некорректный URL репозитория"}], "isError": True}
+            
+            repo_name = f"{parts[-2]}/{parts[-1]}"
+            
+            # Подключаемся к GitHub (без токена для публичных репозиториев)
+            g = Github()
+            repo = g.get_repo(repo_name)
+            
+            # Получаем список всех .kt файлов (сканируем от корня)
+            kt_files = []
+            
+            def scan_directory(path=""):
+                try:
+                    contents = repo.get_contents(path, ref=branch)
+                    if not isinstance(contents, list):
+                        contents = [contents]
+                    
+                    for content in contents:
+                        if content.type == "dir":
+                            # Пропускаем служебные директории
+                            if content.name not in [".git", ".github", "build", "gradle", ".gradle", "node_modules"]:
+                                scan_directory(content.path)
+                        elif content.name.endswith(".kt"):
+                            kt_files.append(content.path)
+                except Exception as e:
+                    # Игнорируем ошибки доступа к отдельным директориям
+                    pass
+            
+            # Начинаем сканирование с корня
+            scan_directory("")
+            
+            text = f"""📦 Репозиторий: {repo_name}
+🌿 Ветка: {branch}
+📂 Найдено Kotlin файлов: {len(kt_files)}
+
+"""
+            if kt_files:
+                text += "📄 Список файлов:\n"
+                for i, file_path in enumerate(kt_files[:50], 1):
+                    text += f"{i}. {file_path}\n"
+                if len(kt_files) > 50:
+                    text += f"\n... и ещё {len(kt_files) - 50} файлов"
+            else:
+                text += "❌ Kotlin файлы не найдены во всём репозитории\n\n"
+                text += "💡 Возможные причины:\n"
+                text += "• Репозиторий приватный (нужен токен GitHub)\n"
+                text += "• Неверная ветка (проверьте настройки)\n"
+                text += "• В репозитории нет .kt файлов"
+            
+            return {"content": [{"type": "text", "text": text}], "files": kt_files}
+        except Exception as e:
+            return {"content": [{"type": "text", "text": f"❌ Ошибка доступа к GitHub: {str(e)}\n\nПроверьте:\n• URL репозитория корректен\n• Репозиторий публичный\n• Ветка существует"}], "isError": True}
+    
+    elif name == "github_get_file_content":
+        try:
+            from github import Github
+            
+            repo_url = args.get("repo_url", "")
+            file_path = args.get("file_path", "")
+            branch = args.get("branch", "main")
+            
+            if not repo_url or not file_path:
+                return {"content": [{"type": "text", "text": "❌ Укажите repo_url и file_path"}], "isError": True}
+            
+            # Парсим repo_url
+            parts = repo_url.rstrip('/').split('/')
+            repo_name = f"{parts[-2]}/{parts[-1]}"
+            
+            # Подключаемся к GitHub
+            g = Github()
+            repo = g.get_repo(repo_name)
+            
+            # Получаем содержимое файла
+            file_content = repo.get_contents(file_path, ref=branch)
+            content = file_content.decoded_content.decode('utf-8')
+            
+            lines_count = len(content.split('\n'))
+            size_kb = len(content) / 1024
+            
+            text = f"""📄 Файл: {file_path}
+📦 Репозиторий: {repo_name}
+🌿 Ветка: {branch}
+📊 Размер: {size_kb:.1f} KB
+📝 Строк: {lines_count}
+
+{'='*50}
+
+{content[:5000]}
+
+{'='*50}
+
+{'✂️ Содержимое обрезано (показаны первые 5000 символов)' if len(content) > 5000 else '✅ Полное содержимое'}
+"""
+            
+            return {"content": [{"type": "text", "text": text}], "file_content": content}
+        except Exception as e:
+            return {"content": [{"type": "text", "text": f"❌ Ошибка чтения файла: {str(e)}"}], "isError": True}
+    
+    elif name == "local_list_kotlin_files":
+        try:
+            import os
+            
+            project_path = args.get("project_path", "/Users/igorurev/FlutterProjects/ChatBot")
+            
+            if not os.path.exists(project_path):
+                return {"content": [{"type": "text", "text": f"❌ Директория не найдена: {project_path}"}], "isError": True}
+            
+            kt_files = []
+            
+            # Рекурсивно сканируем директорию
+            for root, dirs, files in os.walk(project_path):
+                # Пропускаем служебные директории
+                dirs[:] = [d for d in dirs if d not in ['.git', '.github', 'build', 'gradle', '.gradle', 'node_modules', '.idea']]
+                
+                for file in files:
+                    if file.endswith('.kt'):
+                        full_path = os.path.join(root, file)
+                        # Делаем путь относительным от project_path
+                        relative_path = os.path.relpath(full_path, project_path)
+                        kt_files.append(relative_path)
+            
+            text = f"""📁 Локальный проект: {project_path}
+📂 Найдено Kotlin файлов: {len(kt_files)}
+
+"""
+            if kt_files:
+                text += "📄 Список файлов:\n"
+                for i, file_path in enumerate(kt_files[:50], 1):
+                    text += f"{i}. {file_path}\n"
+                if len(kt_files) > 50:
+                    text += f"\n... и ещё {len(kt_files) - 50} файлов"
+            else:
+                text += "❌ Kotlin файлы не найдены в проекте"
+            
+            return {"content": [{"type": "text", "text": text}], "files": kt_files}
+        except Exception as e:
+            return {"content": [{"type": "text", "text": f"❌ Ошибка сканирования локальной директории: {str(e)}"}], "isError": True}
+    
+    elif name == "local_get_file_content":
+        try:
+            import os
+            
+            file_path = args.get("file_path", "")
+            
+            if not file_path:
+                return {"content": [{"type": "text", "text": "❌ Укажите file_path"}], "isError": True}
+            
+            if not os.path.exists(file_path):
+                return {"content": [{"type": "text", "text": f"❌ Файл не найден: {file_path}"}], "isError": True}
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            lines_count = len(content.split('\n'))
+            size_kb = len(content) / 1024
+            file_name = os.path.basename(file_path)
+            
+            text = f"""📄 Файл: {file_name}
+📁 Путь: {file_path}
+📊 Размер: {size_kb:.1f} KB
+📝 Строк: {lines_count}
+
+{'='*50}
+
+{content[:5000]}
+
+{'='*50}
+
+{'✂️ Содержимое обрезано (показаны первые 5000 символов)' if len(content) > 5000 else '✅ Полное содержимое'}
+"""
+            
+            return {"content": [{"type": "text", "text": text}], "file_content": content}
+        except Exception as e:
+            return {"content": [{"type": "text", "text": f"❌ Ошибка чтения файла: {str(e)}"}], "isError": True}
     
     # ============================================
     # SUPPORT COMMANDS

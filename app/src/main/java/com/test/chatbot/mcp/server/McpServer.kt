@@ -37,6 +37,11 @@ class McpServer(
     private var todoistToken: String = ""
     private var syncInterval: Int = 1 // минуты
     
+    // In-memory кэш для задач (без SQLite)
+    private var cachedTasks: List<TodoistTask>? = null
+    private var cacheExpiry: Long = 0
+    private val CACHE_DURATION_MS = 60_000L // 1 минута
+    
     private lateinit var taskRepository: TaskRepository
     private lateinit var todoistService: TodoistService
     private lateinit var schedulerManager: SchedulerManager
@@ -135,7 +140,11 @@ class McpServer(
                     
                     // Создаём ProjectDocsService для RAG по проекту
                     projectDocsService = ProjectDocsService(context, documentIndexService, ollamaRAGService!!)
-                    Log.i(TAG, "✅ ProjectDocsService инициализирован")
+                    // Устанавливаем функцию для вызова Python MCP
+                    projectDocsService!!.pythonMcpCall = { toolName, args ->
+                        callPythonMcpServer(toolName, args)
+                    }
+                    Log.i(TAG, "✅ ProjectDocsService инициализирован (с GitHub интеграцией)")
                     
                     // Создаём SupportService для работы с поддержкой
                     supportService = SupportService(context, ollamaRAGService!!)
@@ -349,11 +358,48 @@ class McpServer(
                     )
                 ),
                 mapOf(
+                    "name" to "add_task",
+                    "description" to "Добавить новую задачу в список",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "title" to mapOf(
+                                "type" to "string",
+                                "description" to "Название задачи"
+                            ),
+                            "description" to mapOf(
+                                "type" to "string",
+                                "description" to "Описание задачи (необязательно)"
+                            )
+                        ),
+                        "required" to listOf("title")
+                    )
+                ),
+                mapOf(
+                    "name" to "complete_task",
+                    "description" to "Отметить задачу как выполненную",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "task_id" to mapOf(
+                                "type" to "string",
+                                "description" to "ID задачи из Todoist"
+                            )
+                        ),
+                        "required" to listOf("task_id")
+                    )
+                ),
+                mapOf(
                     "name" to "list_tasks",
                     "description" to "Получить список задач",
                     "inputSchema" to mapOf(
                         "type" to "object",
-                        "properties" to mapOf<String, Any>(),
+                        "properties" to mapOf(
+                            "status" to mapOf(
+                                "type" to "string",
+                                "description" to "Фильтр по статусу: pending или completed"
+                            )
+                        ),
                         "required" to emptyList<String>()
                     )
                 ),
@@ -950,6 +996,21 @@ class McpServer(
                     )
                 ),
                 mapOf(
+                    "name" to "scan_project",
+                    "description" to "Сканировать проект и найти проблемы/задачи для улучшения",
+                    "inputSchema" to mapOf(
+                        "type" to "object",
+                        "properties" to mapOf(
+                            "scope" to mapOf(
+                                "type" to "string",
+                                "description" to "Область сканирования: all, code, docs, architecture",
+                                "default" to "all"
+                            )
+                        ),
+                        "required" to emptyList<String>()
+                    )
+                ),
+                mapOf(
                     "name" to "project_search_docs",
                     "description" to "Поиск по документации проекта",
                     "inputSchema" to mapOf(
@@ -1089,7 +1150,9 @@ class McpServer(
         
         return when (name) {
             "sync_todoist" -> runBlocking { syncTodoist() }
-            "list_tasks" -> runBlocking { listTasks() }
+            "add_task" -> runBlocking { addTask(arguments) }
+            "complete_task" -> runBlocking { completeTask(arguments) }
+            "list_tasks" -> runBlocking { listTasks(arguments) }
             "get_summary" -> runBlocking { getSummary() }
             "search_web" -> runBlocking { searchWeb(arguments) }
             "save_to_file" -> runBlocking { saveToFile(arguments) }
@@ -1146,6 +1209,7 @@ class McpServer(
             "project_index" -> runBlocking { indexProjectDocs() }
             "project_help" -> runBlocking { getProjectHelp(arguments) }
             "project_search_docs" -> runBlocking { searchProjectDocs(arguments) }
+            "scan_project" -> runBlocking { scanProject(arguments) }
             // Support & CRM Tools
             "support_user_info" -> runBlocking { getUserInfoTool(arguments) }
             "support_user_tickets" -> runBlocking { getUserTicketsTool(arguments) }
@@ -1165,21 +1229,62 @@ class McpServer(
     /**
      * Синхронизация с Todoist
      */
+    /**
+     * Обновить кэш задач из Todoist
+     */
+    private suspend fun refreshTasksCache(): List<TodoistTask> {
+        val result = todoistService.getAllTasks()
+        return if (result.isSuccess) {
+            val tasks = result.getOrNull() ?: emptyList()
+            cachedTasks = tasks
+            cacheExpiry = System.currentTimeMillis() + CACHE_DURATION_MS
+            Log.i(TAG, "✅ Кэш обновлен: ${tasks.size} задач")
+            tasks
+        } else {
+            Log.e(TAG, "❌ Ошибка обновления кэша: ${result.exceptionOrNull()?.message}")
+            cachedTasks ?: emptyList()
+        }
+    }
+    
+    /**
+     * Получить задачи (из кэша или Todoist)
+     */
+    private suspend fun getTasksWithCache(): List<TodoistTask> {
+        // Проверяем кэш
+        if (cachedTasks != null && System.currentTimeMillis() < cacheExpiry) {
+            Log.d(TAG, "📦 Задачи из кэша: ${cachedTasks!!.size}")
+            return cachedTasks!!
+        }
+        
+        // Обновляем кэш
+        return refreshTasksCache()
+    }
+    
     private suspend fun syncTodoist(): Map<String, Any> {
         return try {
-            val count = todoistService.syncTasks(taskRepository)
+            // Принудительно обновляем кэш
+            val tasks = refreshTasksCache()
+            
+            val message = buildString {
+                append("✅ Синхронизация завершена!\n\n")
+                append("📊 Всего задач в Todoist: ${tasks.size}\n")
+                val pending = tasks.count { !it.isCompleted }
+                val completed = tasks.count { it.isCompleted }
+                append("⏳ Активных: $pending\n")
+                append("✅ Завершенных: $completed\n\n")
+                append("Используйте /tasks для просмотра")
+            }
+            
             mapOf(
                 "content" to listOf(
-                    mapOf(
-                        "type" to "text",
-                        "text" to "✅ Синхронизация завершена!\n\n📥 Синхронизировано задач с Todoist: $count"
-                    )
+                    mapOf("type" to "text", "text" to message)
                 )
             )
         } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка синхронизации: ${e.message}", e)
             mapOf(
                 "content" to listOf(
-                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                    mapOf("type" to "text", "text" to "❌ Ошибка синхронизации: ${e.message}")
                 )
             )
         }
@@ -1188,20 +1293,153 @@ class McpServer(
     /**
      * Список задач
      */
-    private suspend fun listTasks(): Map<String, Any> {
+    /**
+     * Добавить задачу
+     */
+    private suspend fun addTask(arguments: JsonObject?): Map<String, Any> {
         return try {
-            val tasks = taskRepository.getAllTasks()
+            val title = arguments?.get("title")?.asString ?: ""
+            val description = arguments?.get("description")?.asString ?: ""
+            
+            if (title.isBlank()) {
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Ошибка: название задачи не может быть пустым")
+                    ),
+                    "isError" to true
+                )
+            }
+            
+            // Создаём задачу напрямую в Todoist
+            val result = todoistService.createTask(title, description)
+            
+            if (result.isSuccess) {
+                val todoistId = result.getOrNull()!!
+                Log.i(TAG, "✅ Задача создана в Todoist с ID: $todoistId")
+                
+                // Сбрасываем кэш для обновления
+                cachedTasks = null
+                
+                val message = "✅ Задача добавлена в Todoist: $title\n\n🔗 ID: $todoistId\n\nИспользуйте /sync для обновления списка"
+                
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to message)
+                    )
+                )
+            } else {
+                val error = result.exceptionOrNull()
+                Log.e(TAG, "❌ Ошибка создания задачи: ${error?.message}")
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Ошибка создания задачи: ${error?.message}")
+                    ),
+                    "isError" to true
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка создания задачи: ${e.message}", e)
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                ),
+                "isError" to true
+            )
+        }
+    }
+    
+    /**
+     * Завершить задачу
+     */
+    private suspend fun completeTask(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            // task_id теперь это Todoist ID (строка)
+            val taskId = arguments?.get("task_id")?.asString ?: ""
+            
+            if (taskId.isBlank()) {
+                return mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Ошибка: укажите ID задачи из Todoist")
+                    ),
+                    "isError" to true
+                )
+            }
+            
+            // Завершаем задачу напрямую в Todoist
+            val result = todoistService.completeTask(taskId)
+            
+            if (result.isSuccess) {
+                Log.i(TAG, "✅ Задача $taskId завершена в Todoist")
+                
+                // Сбрасываем кэш
+                cachedTasks = null
+                
+                val message = "✅ Задача завершена в Todoist\n\n🔗 ID: $taskId\n\nИспользуйте /sync для обновления списка"
+                
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to message)
+                    )
+                )
+            } else {
+                val error = result.exceptionOrNull()
+                Log.e(TAG, "❌ Ошибка завершения задачи: ${error?.message}")
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to "❌ Ошибка: ${error?.message}")
+                    ),
+                    "isError" to true
+                )
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка завершения задачи: ${e.message}", e)
+            mapOf(
+                "content" to listOf(
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                ),
+                "isError" to true
+            )
+        }
+    }
+    
+    private suspend fun listTasks(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val status = arguments?.get("status")?.asString
+            
+            // Получаем задачи из кэша или Todoist
+            val allTasks = getTasksWithCache()
+            
+            // Фильтруем по статусу
+            val tasks = when (status) {
+                "pending" -> allTasks.filter { !it.isCompleted }
+                "completed" -> allTasks.filter { it.isCompleted }
+                else -> allTasks
+            }
+            
             val text = if (tasks.isEmpty()) {
-                "📋 Нет задач"
+                when (status) {
+                    "pending" -> "✅ Нет активных задач\n\nИспользуйте /sync для синхронизации"
+                    "completed" -> "📋 Нет завершенных задач"
+                    else -> "📋 Нет задач\n\nИспользуйте /sync для загрузки из Todoist"
+                }
             } else {
                 buildString {
-                    append("📋 Список задач (${tasks.size}):\n\n")
+                    append("📋 Список задач из Todoist (${tasks.size}):\n\n")
                     tasks.forEachIndexed { index, task ->
-                        val status = if (task.completed) "✅" else "⏳"
-                        append("$status #${task.id}: ${task.title}\n")
+                        val statusIcon = if (task.isCompleted) "✅" else "⏳"
+                        val priorityIcon = when (task.priority) {
+                            4 -> "🔴" // Urgent
+                            3 -> "🟠" // High
+                            2 -> "🟡" // Medium
+                            else -> "⚪" // Normal
+                        }
+                        
+                        append("$statusIcon $priorityIcon ${task.content}\n")
                         if (task.description.isNotBlank()) {
                             append("   ${task.description}\n")
                         }
+                        append("   ID: ${task.id}\n")
+                        append("   Создана: ${task.createdAt ?: "—"}\n")
                         if (index < tasks.size - 1) append("\n")
                     }
                 }
@@ -1212,9 +1450,10 @@ class McpServer(
                 )
             )
         } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка получения задач: ${e.message}", e)
             mapOf(
                 "content" to listOf(
-                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}")
+                    mapOf("type" to "text", "text" to "❌ Ошибка: ${e.message}\n\nПопробуйте /sync")
                 )
             )
         }
@@ -2282,8 +2521,9 @@ class McpServer(
     private suspend fun callPythonMcpServer(toolName: String, arguments: Map<String, Any>?): Map<String, Any> = withContext(Dispatchers.IO) {
         try {
             val client = OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(180, TimeUnit.SECONDS) // 3 минуты для индексации проекта
+                .writeTimeout(30, TimeUnit.SECONDS)
                 .build()
             
             // Создаем JSON-RPC запрос
@@ -2555,6 +2795,110 @@ class McpServer(
                 )
             )
         } catch (e: Exception) {
+            createErrorResponse(e)
+        }
+    }
+    
+    /**
+     * Сканировать проект и найти проблемы
+     */
+    private suspend fun scanProject(arguments: JsonObject?): Map<String, Any> {
+        return try {
+            val scope = arguments?.get("scope")?.asString ?: "all"
+            
+            if (projectDocsService == null || ollamaRAGService == null) {
+                return createErrorMessage(
+                    "RAG сервис недоступен.\n\n" +
+                    "Убедитесь что:\n" +
+                    "1. Ollama настроена (/ollama config)\n" +
+                    "2. Проект проиндексирован (/project index)"
+                )
+            }
+            
+            Log.i(TAG, "🔍 Сканирование проекта (scope: $scope)...")
+            
+            val scanner = ProjectScanner(context, ollamaRAGService!!, projectDocsService!!)
+            val result = scanner.scanProject(scope)
+            
+            if (result.isSuccess) {
+                val issues = result.getOrNull() ?: emptyList()
+                
+                if (issues.isEmpty()) {
+                    return mapOf(
+                        "content" to listOf(
+                            mapOf("type" to "text", "text" to "✅ Проект в отличном состоянии!\n\nПроблем не найдено.")
+                        )
+                    )
+                }
+                
+                // Формируем JSON с задачами
+                val tasksJson = com.google.gson.GsonBuilder()
+                    .setPrettyPrinting()
+                    .create()
+                    .toJson(issues)
+                
+                val message = buildString {
+                    append("🔍 **РЕЗУЛЬТАТЫ СКАНИРОВАНИЯ**\n")
+                    append("━━━━━━━━━━━━━━━━━━━━\n\n")
+                    append("📊 Найдено проблем: ${issues.size}\n\n")
+                    
+                    val byPriority = issues.groupBy { it.priority }
+                    byPriority["high"]?.let { append("🔴 Высокий приоритет: ${it.size}\n") }
+                    byPriority["medium"]?.let { append("🟡 Средний приоритет: ${it.size}\n") }
+                    byPriority["low"]?.let { append("⚪ Низкий приоритет: ${it.size}\n") }
+                    
+                    append("\n**📋 СПИСОК ПРОБЛЕМ:**\n\n")
+                    
+                    issues.take(10).forEachIndexed { index, issue ->
+                        val priorityIcon = when (issue.priority) {
+                            "high" -> "🔴"
+                            "medium" -> "🟡"
+                            else -> "⚪"
+                        }
+                        val categoryIcon = when (issue.category) {
+                            "bug" -> "🐛"
+                            "security" -> "🔒"
+                            "refactor" -> "♻️"
+                            "docs" -> "📝"
+                            else -> "💡"
+                        }
+                        
+                        append("${index + 1}. $priorityIcon $categoryIcon ${issue.title}\n")
+                        append("   ${issue.description.take(100)}\n")
+                        if (issue.file != null) {
+                            append("   📄 ${issue.file}\n")
+                        }
+                        append("\n")
+                    }
+                    
+                    if (issues.size > 10) {
+                        append("\n... и ещё ${issues.size - 10} проблем\n")
+                    }
+                    
+                    append("\n**ДАННЫЕ ДЛЯ UI:**\n")
+                    append("```json\n$tasksJson\n```")
+                }
+                
+                mapOf(
+                    "content" to listOf(
+                        mapOf("type" to "text", "text" to message)
+                    ),
+                    "tasks" to issues.map { issue ->
+                        mapOf(
+                            "title" to issue.title,
+                            "description" to issue.description,
+                            "priority" to issue.priority,
+                            "category" to issue.category,
+                            "file" to (issue.file ?: ""),
+                            "recommendation" to issue.recommendation
+                        )
+                    }
+                )
+            } else {
+                createErrorMessage("Ошибка сканирования: ${result.exceptionOrNull()?.message}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Ошибка scanProject: ${e.message}", e)
             createErrorResponse(e)
         }
     }

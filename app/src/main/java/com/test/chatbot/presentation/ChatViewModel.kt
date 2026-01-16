@@ -9,7 +9,6 @@ import com.test.chatbot.data.memory.MemoryRepository
 import com.test.chatbot.data.memory.MemoryState
 import com.test.chatbot.models.*
 import com.test.chatbot.repository.ChatRepository
-import com.test.chatbot.utils.DemoDocsInitializer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -1252,6 +1251,40 @@ class ChatViewModel(
                         handleSupportCommand(subCommand, args)
                     }
                     
+                    // Team Assistant Commands - интегрированный командный ассистент
+                    "tasks" -> {
+                        val priority = parts.getOrNull(1)?.trim() ?: "all"
+                        handleTasksListCommand(priority)
+                    }
+                    
+                    "create_task", "add_task" -> {
+                        val description = parts.drop(1).joinToString(" ").trim()
+                        if (description.isBlank()) {
+                            addBotMessage("❌ Укажите описание задачи: /create_task Реализовать авторизацию")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handleCreateTaskCommand(description)
+                    }
+                    
+                    "project_status", "status" -> {
+                        handleProjectStatusCommand()
+                    }
+                    
+                    "recommend", "recommendations" -> {
+                        handleRecommendationsCommand()
+                    }
+                    
+                    "complete_task", "done" -> {
+                        val taskId = parts.getOrNull(1)?.toIntOrNull()
+                        if (taskId == null) {
+                            addBotMessage("❌ Укажите ID задачи: /complete_task 5")
+                            _uiState.update { it.copy(isLoading = false) }
+                            return@launch
+                        }
+                        handleCompleteTaskCommand(taskId)
+                    }
+                    
                     else -> {
                         addBotMessage(getHelpMessage())
                         _uiState.update { it.copy(isLoading = false) }
@@ -1816,6 +1849,21 @@ class ChatViewModel(
             /support stats - статистика поддержки
             /support user - моя информация
             
+            🤝 КОМАНДНЫЙ АССИСТЕНТ (RAG + MCP + TODOIST):
+            ✨ Интегрированное управление проектом:
+            
+            /tasks [all|high|medium|low] - показать задачи
+            /create_task <описание> - создать новую задачу
+            /complete_task <ID> - отметить задачу выполненной
+            /project_status - полный статус проекта
+            /recommend - рекомендации по приоритетам
+            
+            💡 Примеры:
+            • "/tasks high" - задачи высокого приоритета
+            • "/create_task СРОЧНО: Исправить баг авторизации"
+            • "/project_status" - Git + Задачи + RAG анализ
+            • "/recommend" - что делать в первую очередь
+            
             /help - показать эту справку
         """.trimIndent()
     }
@@ -1928,9 +1976,6 @@ class ChatViewModel(
                     _uiState.update { it.copy(isLoading = false) }
                 }
             }
-            "demo" -> {
-                handleIndexDemoDocsCommand()
-            }
             "clear" -> {
                 val result = mcpClient?.callTool("clear_index", emptyMap())
                 result?.onSuccess { toolResult ->
@@ -1989,66 +2034,6 @@ class ChatViewModel(
             addBotMessage("❌ Ошибка получения списка: ${it.message}")
             _uiState.update { it.copy(isLoading = false) }
         }
-    }
-    
-    private suspend fun handleIndexDemoDocsCommand() {
-        // Сначала проверяем доступность Ollama
-        val ollamaCheck = mcpClient?.callTool("ollama_status", emptyMap())
-        val ollamaAvailable = ollamaCheck?.isSuccess == true
-        
-        if (!ollamaAvailable) {
-            addBotMessage(
-                "⚠️ ВНИМАНИЕ: Ollama недоступна!\n\n" +
-                "Для качественного поиска необходимо настроить Ollama:\n\n" +
-                "1. Выполните: /ollama config http://10.0.2.2:11434\n" +
-                "2. Убедитесь что Ollama запущена на компьютере\n" +
-                "3. Проверьте: /ollama status\n\n" +
-                "❌ Индексация отменена."
-            )
-            _uiState.update { it.copy(isLoading = false) }
-            return
-        }
-        
-        addBotMessage("📚 Индексация демо-документов с Ollama...\n\n" +
-                "Это может занять 30-60 секунд.")
-        
-        val demoDocsInitializer = DemoDocsInitializer(context)
-        val demoFiles = demoDocsInitializer.getDemoDocsList()
-        
-        if (demoFiles.isEmpty()) {
-            addBotMessage("❌ Демо-документы не найдены")
-            _uiState.update { it.copy(isLoading = false) }
-            return
-        }
-        
-        var successCount = 0
-        var failCount = 0
-        val results = StringBuilder()
-        results.append("📄 Индексация ${demoFiles.size} документов:\n\n")
-        
-        for ((index, fileName) in demoFiles.withIndex()) {
-            val result = mcpClient?.callTool("index_file", mapOf("file_path" to fileName))
-            
-            if (result?.isSuccess == true) {
-                successCount++
-                results.append("✅ ${index + 1}. $fileName\n")
-            } else {
-                failCount++
-                results.append("❌ ${index + 1}. $fileName\n")
-            }
-        }
-        
-        results.append("\n━━━━━━━━━━━━━━━━━━━━\n")
-        results.append("✅ Успешно: $successCount\n")
-        if (failCount > 0) {
-            results.append("❌ Ошибок: $failCount\n")
-        }
-        results.append("\n💡 Теперь можете использовать:\n")
-        results.append("/search <запрос> - поиск по документам\n")
-        results.append("/ask <вопрос> - RAG с генерацией ответа")
-        
-        addBotMessage(results.toString())
-        _uiState.update { it.copy(isLoading = false) }
     }
     
     // ==================== Ollama Commands ====================
@@ -2705,6 +2690,322 @@ class ChatViewModel(
                 )
                 _uiState.update { it.copy(isLoading = false) }
             }
+        }
+    }
+    
+    // ============================================
+    // TEAM ASSISTANT - ИНТЕГРИРОВАННЫЙ КОМАНДНЫЙ АССИСТЕНТ
+    // ============================================
+    
+    /**
+     * Показать список задач с фильтрацией по приоритету
+     * Команда: /tasks [priority]
+     */
+    private suspend fun handleTasksListCommand(priority: String) {
+        if (mcpClient == null) {
+            addBotMessage("❌ MCP сервер недоступен")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        // Получаем список задач из MCP
+        val status = if (priority == "all") null else "pending"
+        val result = mcpClient?.callTool("list_tasks", mapOf("status" to (status ?: "")))
+        
+        result?.onSuccess { toolResult ->
+            val tasksText = toolResult.content.firstOrNull()?.text ?: "Нет задач"
+            
+            // Парсим задачи и фильтруем по приоритету
+            val filteredText = if (priority != "all" && priority in listOf("high", "medium", "low")) {
+                filterTasksByPriority(tasksText, priority)
+            } else {
+                tasksText
+            }
+            
+            addBotMessage(filteredText)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка получения задач: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    /**
+     * Создать новую задачу
+     * Команда: /create_task <описание>
+     */
+    private suspend fun handleCreateTaskCommand(description: String) {
+        if (mcpClient == null) {
+            addBotMessage("❌ MCP сервер недоступен")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        // Определяем приоритет по ключевым словам
+        val priority = when {
+            description.contains("срочно", ignoreCase = true) || 
+            description.contains("важно", ignoreCase = true) ||
+            description.contains("критично", ignoreCase = true) -> "🔴 HIGH"
+            description.contains("низкий", ignoreCase = true) ||
+            description.contains("потом", ignoreCase = true) -> "🟢 LOW"
+            else -> "🟡 MEDIUM"
+        }
+        
+        // Добавляем приоритет к описанию
+        val fullDescription = "[$priority] $description"
+        
+        val result = mcpClient?.callTool("add_task", mapOf(
+            "title" to description.take(100),
+            "description" to fullDescription
+        ))
+        
+        result?.onSuccess { toolResult ->
+            val message = toolResult.content.firstOrNull()?.text ?: "Задача создана"
+            addBotMessage("$message\n\nИспользуйте /tasks для просмотра всех задач")
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка создания задачи: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    /**
+     * Отметить задачу как выполненную
+     * Команда: /complete_task <ID>
+     */
+    private suspend fun handleCompleteTaskCommand(taskId: Int) {
+        if (mcpClient == null) {
+            addBotMessage("❌ MCP сервер недоступен")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        val result = mcpClient?.callTool("complete_task", mapOf("task_id" to taskId))
+        
+        result?.onSuccess { toolResult ->
+            val message = toolResult.content.firstOrNull()?.text ?: "Задача выполнена"
+            addBotMessage(message)
+            _uiState.update { it.copy(isLoading = false) }
+        }?.onFailure {
+            addBotMessage("❌ Ошибка: ${it.message}")
+            _uiState.update { it.copy(isLoading = false) }
+        }
+    }
+    
+    /**
+     * Показать статус проекта с анализом через RAG
+     * Команда: /project_status
+     */
+    private suspend fun handleProjectStatusCommand() {
+        if (mcpClient == null) {
+            addBotMessage("❌ MCP сервер недоступен")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        val response = StringBuilder()
+        response.appendLine("📊 **СТАТУС ПРОЕКТА**")
+        response.appendLine("━━━━━━━━━━━━━━━━━━━━\n")
+        
+        // 1. Git статус
+        val gitResult = mcpClient?.callTool("git_status", emptyMap())
+        gitResult?.onSuccess { toolResult ->
+            val gitStatus = toolResult.content.firstOrNull()?.text ?: ""
+            response.appendLine(gitStatus)
+            response.appendLine()
+        }
+        
+        // 2. Информация о проекте
+        val projectResult = mcpClient?.callTool("project_info", emptyMap())
+        projectResult?.onSuccess { toolResult ->
+            val projectInfo = toolResult.content.firstOrNull()?.text ?: ""
+            response.appendLine(projectInfo)
+            response.appendLine()
+        }
+        
+        // 3. Активные задачи
+        val tasksResult = mcpClient?.callTool("list_tasks", mapOf("status" to "pending"))
+        tasksResult?.onSuccess { toolResult ->
+            val tasks = toolResult.content.firstOrNull()?.text ?: "Нет активных задач"
+            response.appendLine("**📋 АКТИВНЫЕ ЗАДАЧИ:**")
+            response.appendLine(tasks)
+            response.appendLine()
+        }
+        
+        // 4. RAG анализ проекта
+        response.appendLine("**🤖 АНАЛИЗ ПРОЕКТА (RAG):**")
+        val ragAnalysis = analyzeProjectWithRAG()
+        response.appendLine(ragAnalysis)
+        
+        addBotMessage(response.toString())
+        _uiState.update { it.copy(isLoading = false) }
+    }
+    
+    /**
+     * Дать рекомендации по приоритетам на основе RAG + Git + задач
+     * Команда: /recommend
+     */
+    private suspend fun handleRecommendationsCommand() {
+        if (mcpClient == null) {
+            addBotMessage("❌ MCP сервер недоступен")
+            _uiState.update { it.copy(isLoading = false) }
+            return
+        }
+        
+        val response = StringBuilder()
+        response.appendLine("💡 **РЕКОМЕНДАЦИИ ПО ПРИОРИТЕТАМ**")
+        response.appendLine("━━━━━━━━━━━━━━━━━━━━\n")
+        
+        // 1. Получаем задачи
+        val tasksResult = mcpClient?.callTool("list_tasks", mapOf("status" to "pending"))
+        val tasksText = tasksResult?.getOrNull()?.content?.firstOrNull()?.text ?: ""
+        
+        // 2. Получаем git статус
+        val gitResult = mcpClient?.callTool("git_status", emptyMap())
+        val gitStatus = gitResult?.getOrNull()?.content?.firstOrNull()?.text ?: ""
+        
+        // 3. Анализируем через RAG
+        val recommendations = generateRecommendations(tasksText, gitStatus)
+        response.appendLine(recommendations)
+        
+        // 4. Приоритеты задач
+        response.appendLine("\n**📌 ПРЕДЛАГАЕМЫЙ ПОРЯДОК:**")
+        val prioritizedTasks = prioritizeTasks(tasksText)
+        response.appendLine(prioritizedTasks)
+        
+        addBotMessage(response.toString())
+        _uiState.update { it.copy(isLoading = false) }
+    }
+    
+    /**
+     * Фильтровать задачи по приоритету
+     */
+    private fun filterTasksByPriority(tasksText: String, priority: String): String {
+        val priorityMarker = when (priority.lowercase()) {
+            "high" -> "🔴 HIGH"
+            "medium" -> "🟡 MEDIUM"
+            "low" -> "🟢 LOW"
+            else -> return tasksText
+        }
+        
+        val lines = tasksText.split("\n")
+        val filtered = lines.filter { line ->
+            line.contains(priorityMarker, ignoreCase = true) ||
+            line.startsWith("📋") || // Заголовок
+            line.startsWith("━") || // Разделитель
+            line.isBlank()
+        }
+        
+        return if (filtered.size > 3) {
+            filtered.joinToString("\n")
+        } else {
+            "📋 Нет задач с приоритетом $priority\n\nИспользуйте /tasks для просмотра всех задач"
+        }
+    }
+    
+    /**
+     * Анализ проекта через RAG (использует project_help MCP tool)
+     */
+    private suspend fun analyzeProjectWithRAG(): String {
+        return try {
+            val result = mcpClient?.callTool("project_help", mapOf(
+                "topic" to "Текущее состояние проекта: основные компоненты, что в разработке, технические долги"
+            ))
+            
+            result?.getOrNull()?.content?.firstOrNull()?.text 
+                ?: "✅ Проект в активной разработке\n" +
+                   "📱 Основные компоненты: RAG, MCP, Support Chat, Team Assistant\n" +
+                   "🚀 В разработке: Интеграция Todoist, улучшение приоритизации"
+        } catch (e: Exception) {
+            "Ошибка RAG анализа: ${e.message}"
+        }
+    }
+    
+    /**
+     * Генерация рекомендаций на основе задач и git статуса
+     */
+    private suspend fun generateRecommendations(tasksText: String, gitStatus: String): String {
+        return try {
+            val contextInfo = """
+                Текущие задачи:
+                $tasksText
+                
+                Git статус:
+                $gitStatus
+            """.trimIndent()
+            
+            val result = mcpClient?.callTool("project_help", mapOf(
+                "topic" to "Рекомендации по приоритетам задач на основе: $contextInfo"
+            ))
+            
+            result?.getOrNull()?.content?.firstOrNull()?.text 
+                ?: generateSmartRecommendations(tasksText, gitStatus)
+        } catch (e: Exception) {
+            generateSmartRecommendations(tasksText, gitStatus)
+        }
+    }
+    
+    /**
+     * Умные рекомендации на основе анализа задач и git статуса
+     */
+    private fun generateSmartRecommendations(tasksText: String, gitStatus: String): String {
+        val recommendations = StringBuilder()
+        
+        // Анализируем задачи
+        val hasHighPriority = tasksText.contains("🔴 HIGH", ignoreCase = true)
+        val hasMediumPriority = tasksText.contains("🟡 MEDIUM", ignoreCase = true)
+        val hasChangedFiles = gitStatus.contains("M ", ignoreCase = true)
+        
+        recommendations.appendLine("**📊 АНАЛИЗ:**")
+        
+        if (hasHighPriority) {
+            recommendations.appendLine("⚠️ Обнаружены задачи высокого приоритета - начните с них")
+        }
+        
+        if (hasChangedFiles) {
+            recommendations.appendLine("📝 Есть незафиксированные изменения - рекомендуется сделать commit")
+        }
+        
+        recommendations.appendLine("\n**💡 РЕКОМЕНДАЦИИ:**")
+        recommendations.appendLine("1. Завершите задачи высокого приоритета (🔴 HIGH)")
+        recommendations.appendLine("2. Зафиксируйте текущие изменения в Git")
+        recommendations.appendLine("3. Синхронизируйтесь с Todoist (/sync)")
+        recommendations.appendLine("4. Переходите к задачам среднего приоритета")
+        
+        return recommendations.toString()
+    }
+    
+    /**
+     * Приоритизация задач
+     */
+    private fun prioritizeTasks(tasksText: String): String {
+        val tasks = mutableListOf<Pair<Int, String>>()
+        
+        // Парсим задачи и определяем приоритет
+        tasksText.split("\n").forEach { line ->
+            when {
+                line.contains("🔴 HIGH") -> {
+                    val taskNum = tasks.size + 1
+                    tasks.add(Pair(1, "   $taskNum. ${line.trim()} ⚠️"))
+                }
+                line.contains("🟡 MEDIUM") -> {
+                    val taskNum = tasks.size + 1
+                    tasks.add(Pair(2, "   $taskNum. ${line.trim()}"))
+                }
+                line.contains("🟢 LOW") -> {
+                    val taskNum = tasks.size + 1
+                    tasks.add(Pair(3, "   $taskNum. ${line.trim()} ⏸️"))
+                }
+            }
+        }
+        
+        // Сортируем по приоритету
+        val sorted = tasks.sortedBy { it.first }.map { it.second }
+        
+        return if (sorted.isNotEmpty()) {
+            sorted.joinToString("\n")
+        } else {
+            "   Нет задач для приоритизации"
         }
     }
 }

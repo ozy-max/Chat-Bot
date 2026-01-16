@@ -71,6 +71,54 @@ class TaskRepository(context: Context) {
         }
     }
 
+    suspend fun addTask(title: String, description: String = "", todoistId: String? = null): Long = withContext(Dispatchers.IO) {
+        val now = dateFormat.format(Date())
+        val task = Task(
+            title = title,
+            description = description,
+            completed = false,
+            createdAt = now,
+            todoistId = todoistId
+        )
+        upsertTask(task)
+    }
+
+    suspend fun completeTask(id: Int) = withContext(Dispatchers.IO) {
+        val db = dbHelper.writableDatabase
+        val now = dateFormat.format(Date())
+        
+        val values = ContentValues().apply {
+            put(TaskDatabaseHelper.COLUMN_STATUS, "completed")
+            put(TaskDatabaseHelper.COLUMN_COMPLETED_AT, now)
+        }
+        
+        db.update(
+            TaskDatabaseHelper.TABLE_TASKS,
+            values,
+            "${TaskDatabaseHelper.COLUMN_ID} = ?",
+            arrayOf(id.toString())
+        )
+    }
+
+    suspend fun getTaskById(id: Long): Task? = withContext(Dispatchers.IO) {
+        val db = dbHelper.readableDatabase
+        val cursor = db.query(
+            TaskDatabaseHelper.TABLE_TASKS,
+            null,
+            "${TaskDatabaseHelper.COLUMN_ID} = ?",
+            arrayOf(id.toString()),
+            null, null, null
+        )
+        
+        cursor.use {
+            if (it.moveToFirst()) {
+                cursorToTask(it)
+            } else {
+                null
+            }
+        }
+    }
+
     suspend fun deleteTask(id: Long) = withContext(Dispatchers.IO) {
         val db = dbHelper.writableDatabase
         db.delete(
@@ -106,6 +154,7 @@ class TaskRepository(context: Context) {
             title = cursor.getString(cursor.getColumnIndexOrThrow(TaskDatabaseHelper.COLUMN_TITLE)),
             description = cursor.getString(cursor.getColumnIndexOrThrow(TaskDatabaseHelper.COLUMN_DESCRIPTION)) ?: "",
             completed = cursor.getString(cursor.getColumnIndexOrThrow(TaskDatabaseHelper.COLUMN_STATUS)) == "completed",
+            todoistId = cursor.getString(cursor.getColumnIndexOrThrow(TaskDatabaseHelper.COLUMN_TODOIST_ID)),
             createdAt = cursor.getString(cursor.getColumnIndexOrThrow(TaskDatabaseHelper.COLUMN_CREATED_AT)),
             completedAt = cursor.getString(cursor.getColumnIndexOrThrow(TaskDatabaseHelper.COLUMN_COMPLETED_AT))
         )
@@ -118,6 +167,7 @@ class TaskRepository(context: Context) {
             put(TaskDatabaseHelper.COLUMN_STATUS, if (task.completed) "completed" else "pending")
             put(TaskDatabaseHelper.COLUMN_CREATED_AT, task.createdAt)
             put(TaskDatabaseHelper.COLUMN_COMPLETED_AT, task.completedAt)
+            put(TaskDatabaseHelper.COLUMN_TODOIST_ID, task.todoistId)
         }
     }
 }
@@ -128,7 +178,7 @@ private class TaskDatabaseHelper(context: Context) : SQLiteOpenHelper(
 
     companion object {
         const val DATABASE_NAME = "mcp_tasks.db"
-        const val DATABASE_VERSION = 2
+        const val DATABASE_VERSION = 3  // Увеличена версия для добавления todoistId
 
         const val TABLE_TASKS = "tasks"
         const val COLUMN_ID = "id"
@@ -137,6 +187,7 @@ private class TaskDatabaseHelper(context: Context) : SQLiteOpenHelper(
         const val COLUMN_STATUS = "status"
         const val COLUMN_CREATED_AT = "created_at"
         const val COLUMN_COMPLETED_AT = "completed_at"
+        const val COLUMN_TODOIST_ID = "todoist_id"  // ID задачи в Todoist
     }
 
     override fun onCreate(db: SQLiteDatabase) {
@@ -147,7 +198,8 @@ private class TaskDatabaseHelper(context: Context) : SQLiteOpenHelper(
                 $COLUMN_DESCRIPTION TEXT,
                 $COLUMN_STATUS TEXT DEFAULT 'pending',
                 $COLUMN_CREATED_AT TEXT NOT NULL,
-                $COLUMN_COMPLETED_AT TEXT
+                $COLUMN_COMPLETED_AT TEXT,
+                $COLUMN_TODOIST_ID TEXT
             )
         """.trimIndent())
     }
@@ -164,7 +216,8 @@ data class Task(
     val description: String = "",
     val completed: Boolean = false,
     val createdAt: String,
-    val completedAt: String? = null
+    val completedAt: String? = null,
+    val todoistId: String? = null  // ID задачи в Todoist
 )
 
 data class TaskSummary(

@@ -178,10 +178,11 @@ class TodoistService {
                     
                     val newTask = Task(
                         title = todoistTask.content,
-                        description = "[TODOIST-${todoistTask.id}] ${todoistTask.description}",
+                        description = todoistTask.description,
                         completed = todoistTask.isCompleted,
                         createdAt = createdDate,
-                        completedAt = completedDate
+                        completedAt = completedDate,
+                        todoistId = todoistTask.id  // ✅ Сохраняем Todoist ID
                     )
                     taskRepository.upsertTask(newTask)
                     importedCount++
@@ -192,12 +193,10 @@ class TodoistService {
             var deletedCount = 0
 
             for (localTask in localTasks) {
-                if (localTask.description.contains("[TODOIST-")) {
-                    val todoistId = extractTodoistId(localTask.description)
-                    if (todoistId != null && todoistId !in todoistIds) {
-                        taskRepository.deleteTask(localTask.id)
-                        deletedCount++
-                    }
+                // Проверяем задачи с todoistId, которых больше нет в Todoist
+                if (!localTask.todoistId.isNullOrBlank() && localTask.todoistId !in todoistIds) {
+                    taskRepository.deleteTask(localTask.id)
+                    deletedCount++
                 }
             }
 
@@ -326,6 +325,55 @@ class TodoistService {
             return@withContext Result.failure(e)
         }
     }
+
+    suspend fun completeTask(taskId: String): Result<String> = withContext(Dispatchers.IO) {
+        if (token.isBlank()) {
+            return@withContext Result.failure(Exception("Todoist токен не установлен"))
+        }
+        
+        try {
+            android.util.Log.i("TodoistService", "Завершение задачи: $taskId")
+            
+            val url = "$BASE_URL_V2/tasks/$taskId/close"
+            
+            val request = Request.Builder()
+                .url(url)
+                .header("Authorization", "Bearer $token")
+                .post("".toRequestBody("application/json".toMediaType()))
+                .build()
+            
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    val responseBody = response.body?.string() ?: ""
+                    android.util.Log.e("TodoistService", "❌ Ошибка завершения задачи: ${response.code}")
+                    android.util.Log.e("TodoistService", "Response: $responseBody")
+                    return@withContext Result.failure(Exception("HTTP ${response.code}: $responseBody"))
+                }
+                
+                android.util.Log.i("TodoistService", "✅ Задача $taskId завершена")
+                return@withContext Result.success("Задача $taskId завершена")
+            }
+        } catch (e: Exception) {
+            android.util.Log.e("TodoistService", "❌ Исключение при завершении задачи: ${e.message}", e)
+            return@withContext Result.failure(e)
+        }
+    }
+    
+    /**
+     * Получить все задачи из Todoist (для кэширования)
+     */
+    suspend fun getAllTasks(): Result<List<TodoistTask>> = withContext(Dispatchers.IO) {
+        if (token.isBlank()) {
+            return@withContext Result.failure(Exception("Todoist токен не установлен"))
+        }
+        
+        try {
+            val tasks = fetchAllTodoistTasks()
+            return@withContext Result.success(tasks)
+        } catch (e: Exception) {
+            return@withContext Result.failure(e)
+        }
+    }
 }
 
 private data class TodoistTaskRequest(
@@ -335,7 +383,7 @@ private data class TodoistTaskRequest(
     val description: String? = null
 )
 
-private data class TodoistTask(
+data class TodoistTask(
     @SerializedName("id")
     val id: String,
     @SerializedName("content")
@@ -347,7 +395,9 @@ private data class TodoistTask(
     @SerializedName("created_at")
     val createdAt: String? = null,
     @SerializedName("completed_at")
-    val completedAt: String? = null
+    val completedAt: String? = null,
+    @SerializedName("priority")
+    val priority: Int = 1 // 1=normal, 2=medium, 3=high, 4=urgent
 )
 
 private data class CompletedTasksResponse(

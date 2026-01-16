@@ -27,8 +27,8 @@ import com.test.chatbot.presentation.ChatViewModelFactory
 import com.test.chatbot.presentation.SupportChatScreen
 import com.test.chatbot.presentation.SupportChatViewModel
 import com.test.chatbot.presentation.OnboardingScreen
+import com.test.chatbot.presentation.ScanResultsScreen
 import com.test.chatbot.ui.theme.ChatBotTheme
-import com.test.chatbot.utils.DemoDocsInitializer
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import com.test.chatbot.data.UserPreferences
@@ -67,12 +67,6 @@ class MainActivity : ComponentActivity() {
         
         // Создаем ViewModel для support чата
         supportViewModel = SupportChatViewModel(applicationContext)
-        
-        // Загружаем демо-документы при первом запуске
-        lifecycleScope.launch {
-            val demoDocsInitializer = DemoDocsInitializer(applicationContext)
-            demoDocsInitializer.initializeDemoDocsIfNeeded()
-        }
         
         setContent {
             ChatBotTheme {
@@ -137,6 +131,23 @@ class MainActivity : ComponentActivity() {
                                     viewModel = supportViewModel,
                                     onNavigateBack = {
                                         navController.popBackStack()
+                                    },
+                                    onNavigateToScan = {
+                                        navController.navigate("scan_results")
+                                    }
+                                )
+                            }
+                            
+                            // Экран результатов сканирования
+                            composable("scan_results") {
+                                ScanResultsScreen(
+                                    onBackClick = {
+                                        navController.popBackStack()
+                                    },
+                                    onTasksCreated = { totalTasks ->
+                                        // Возвращаемся в чат с результатами
+                                        navController.popBackStack()
+                                        // Сообщение будет видно автоматически через /tasks
                                     }
                                 )
                             }

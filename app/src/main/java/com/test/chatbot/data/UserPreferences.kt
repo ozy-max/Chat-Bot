@@ -16,6 +16,7 @@ class UserPreferences(context: Context) {
         private const val KEY_LAST_NAME = "last_name"
         private const val KEY_EMAIL = "email"
         private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
+        private const val KEY_PROJECT_PATH = "project_path"
     }
 
     // User ID (генерируется при первом запуске)
@@ -42,6 +43,16 @@ class UserPreferences(context: Context) {
     var isOnboardingCompleted: Boolean
         get() = prefs.getBoolean(KEY_ONBOARDING_COMPLETED, false)
         set(value) = prefs.edit().putBoolean(KEY_ONBOARDING_COMPLETED, value).apply()
+
+    // URL GitHub репозитория для сканирования
+    var githubRepoUrl: String
+        get() = prefs.getString(KEY_PROJECT_PATH, "https://github.com/ozy-max/Chat-Bot") ?: "https://github.com/ozy-max/Chat-Bot"
+        set(value) = prefs.edit().putString(KEY_PROJECT_PATH, value).apply()
+    
+    // Ветка GitHub (по умолчанию main)
+    var githubBranch: String
+        get() = prefs.getString("github_branch", "main") ?: "main"
+        set(value) = prefs.edit().putString("github_branch", value).apply()
 
     // Полное имя
     val fullName: String

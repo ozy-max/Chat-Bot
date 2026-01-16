@@ -275,14 +275,15 @@ class TodoistService {
      */
     suspend fun createTask(
         title: String,
-        description: String? = null
+        description: String? = null,
+        priority: Int = 1 // 1=normal, 2=medium, 3=high, 4=urgent
     ): Result<String> = withContext(Dispatchers.IO) {
         if (token.isBlank()) {
             return@withContext Result.failure(Exception("Todoist токен не установлен"))
         }
         
         try {
-            android.util.Log.i("TodoistService", "Создание задачи: $title")
+            android.util.Log.i("TodoistService", "Создание задачи: $title (приоритет: $priority)")
             android.util.Log.i("TodoistService", "Описание длина: ${description?.length ?: 0} символов")
             
             val url = "$BASE_URL_V2/tasks"
@@ -290,7 +291,8 @@ class TodoistService {
             // Используем Gson для правильной сериализации
             val taskRequest = TodoistTaskRequest(
                 content = title,
-                description = description
+                description = description,
+                priority = priority
             )
             
             val requestBodyJson = gson.toJson(taskRequest)
@@ -380,7 +382,9 @@ private data class TodoistTaskRequest(
     @SerializedName("content")
     val content: String,
     @SerializedName("description")
-    val description: String? = null
+    val description: String? = null,
+    @SerializedName("priority")
+    val priority: Int? = null
 )
 
 data class TodoistTask(

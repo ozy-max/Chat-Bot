@@ -1300,6 +1300,7 @@ class McpServer(
         return try {
             val title = arguments?.get("title")?.asString ?: ""
             val description = arguments?.get("description")?.asString ?: ""
+            val priority = arguments?.get("priority")?.asInt ?: 1 // По умолчанию Normal (1)
             
             if (title.isBlank()) {
                 return mapOf(
@@ -1310,8 +1311,10 @@ class McpServer(
                 )
             }
             
-            // Создаём задачу напрямую в Todoist
-            val result = todoistService.createTask(title, description)
+            Log.i(TAG, "Создание задачи в Todoist: title=$title, priority=$priority")
+            
+            // Создаём задачу напрямую в Todoist с приоритетом
+            val result = todoistService.createTask(title, description, priority)
             
             if (result.isSuccess) {
                 val todoistId = result.getOrNull()!!

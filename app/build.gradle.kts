@@ -40,30 +40,6 @@ android {
     buildFeatures {
         compose = true
     }
-    
-    // Копируем исходники в assets для RAG анализа
-    sourceSets {
-        getByName("main") {
-            assets.srcDirs("src/main/assets")
-        }
-    }
-}
-
-// Задача для копирования .kt файлов в assets/project_sources
-tasks.register<Copy>("copyKotlinSourcesToAssets") {
-    from("src/main/java") {
-        include("**/*.kt")
-    }
-    into("src/main/assets/project_sources")
-    
-    doLast {
-        println("✅ Скопировано Kotlin файлов в assets/project_sources")
-    }
-}
-
-// Выполняем копирование перед сборкой
-tasks.named("preBuild") {
-    dependsOn("copyKotlinSourcesToAssets")
 }
 
 dependencies {

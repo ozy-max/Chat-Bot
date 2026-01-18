@@ -41,13 +41,26 @@ import com.test.chatbot.utils.MessageBridge
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SupportChatScreen(
-    viewModel: SupportChatViewModel,
+    supportViewModel: SupportChatViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToScan: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTabIndex by remember { mutableStateOf(0) }
     val tabs = listOf("Поддержка", "Ассистент")
+    val context = LocalContext.current
+    
+    // Создаем отдельный ViewModel для командного ассистента
+    val assistantViewModel: TeamAssistantChatViewModel = viewModel(
+        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                @Suppress("UNCHECKED_CAST")
+                return TeamAssistantChatViewModel(
+                    context = context
+                ) as T
+            }
+        }
+    )
     
     Scaffold(
         topBar = {
@@ -111,9 +124,11 @@ fun SupportChatScreen(
                         
                         // Кнопка очистить чат
                         IconButton(
-                            onClick = { 
+                            onClick = {
                                 if (selectedTabIndex == 0) {
-                                    viewModel.clearChat()
+                                    supportViewModel.clearChat()
+                                } else {
+                                    assistantViewModel.clearChat()
                                 }
                             },
                             modifier = Modifier
@@ -176,10 +191,11 @@ fun SupportChatScreen(
         // Контент выбранной вкладки
         when (selectedTabIndex) {
             0 -> SupportTabContent(
-                viewModel = viewModel,
+                viewModel = supportViewModel,
                 modifier = Modifier.padding(paddingValues)
             )
             1 -> TeamAssistantTabContent(
+                viewModel = assistantViewModel,
                 modifier = Modifier.padding(paddingValues),
                 onNavigateToScan = onNavigateToScan
             )
@@ -367,24 +383,10 @@ fun SupportTabContent(
  */
 @Composable
 fun TeamAssistantTabContent(
+    viewModel: TeamAssistantChatViewModel,
     modifier: Modifier = Modifier,
     onNavigateToScan: () -> Unit = {}
 ) {
-    // Получаем context до factory
-    val context = LocalContext.current
-    
-    // Создаем отдельный ViewModel для командного ассистента
-    val viewModel: TeamAssistantChatViewModel = viewModel(
-        factory = object : androidx.lifecycle.ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                @Suppress("UNCHECKED_CAST")
-                return TeamAssistantChatViewModel(
-                    context = context
-                ) as T
-            }
-        }
-    )
-    
     val uiState by viewModel.uiState.collectAsState()
     var messageText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()

@@ -29,3 +29,4 @@ mcp-server/.env
 
 # Docker
 .dockerignore
+RAILWAY_TOKEN.txt

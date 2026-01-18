@@ -128,7 +128,7 @@ class MainActivity : ComponentActivity() {
                             // Экран чата поддержки
                             composable("support_chat") {
                                 SupportChatScreen(
-                                    viewModel = supportViewModel,
+                                    supportViewModel = supportViewModel,
                                     onNavigateBack = {
                                         navController.popBackStack()
                                     },

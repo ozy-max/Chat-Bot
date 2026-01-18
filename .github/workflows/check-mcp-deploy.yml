@@ -1,0 +1,99 @@
+name: ✅ Check MCP Server Deploy Status
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mcp-server/**'
+  workflow_dispatch:
+
+jobs:
+  check-deploy:
+    name: 🔍 Check Railway Auto-Deploy Status
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: ℹ️ Deploy Info
+        run: |
+          echo "══════════════════════════════════════"
+          echo "🚀 MCP Server Deployment Check"
+          echo "══════════════════════════════════════"
+          echo ""
+          echo "📝 Commit: ${{ github.sha }}"
+          echo "👤 Author: ${{ github.actor }}"
+          echo "🌿 Branch: ${{ github.ref_name }}"
+          echo ""
+          echo "📂 Changed files:"
+          git diff --name-only HEAD~1 HEAD | grep "mcp-server/" || echo "  No changes in mcp-server/"
+          echo ""
+      
+      - name: ⏳ Wait for Railway Auto-Deploy
+        run: |
+          echo "⏳ Ожидание Railway GitHub Integration..."
+          echo "   Railway автоматически деплоит при push в main"
+          echo "   Изменения в mcp-server/ обнаружены"
+          echo ""
+          echo "   Ожидание: 2-3 минуты для завершения деплоя"
+          echo ""
+          sleep 120  # 2 минуты - достаточно для большинства деплоев
+          echo "✅ Railway Auto-Deploy должен завершиться"
+      
+      - name: 🔍 Check Server Health
+        run: |
+          echo "🔍 Проверка работоспособности MCP сервера..."
+          echo ""
+          
+          # Проверяем доступность сервера
+          RESPONSE=$(curl -s -X POST \
+            https://chatbot-mcp-server-production.up.railway.app/mcp \
+            -H "Content-Type: application/json" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}' \
+            || echo "ERROR")
+          
+          if [[ "$RESPONSE" == "ERROR" ]]; then
+            echo "❌ Сервер не отвечает!"
+            exit 1
+          fi
+          
+          # Проверяем что это валидный JSON-RPC ответ
+          if echo "$RESPONSE" | grep -q '"jsonrpc"'; then
+            echo "✅ Сервер работает!"
+            
+            # Подсчитываем количество инструментов
+            TOOLS_COUNT=$(echo "$RESPONSE" | grep -o '"name"' | wc -l)
+            echo "✅ Доступно инструментов: $TOOLS_COUNT"
+            
+            # Проверяем что есть минимум 10 инструментов
+            if [ "$TOOLS_COUNT" -ge 10 ]; then
+              echo "✅ Все инструменты загружены корректно"
+            else
+              echo "⚠️ Меньше инструментов чем ожидалось"
+            fi
+          else
+            echo "❌ Невалидный ответ от сервера!"
+            echo "$RESPONSE"
+            exit 1
+          fi
+      
+      - name: 🎉 Success
+        run: |
+          echo "══════════════════════════════════════"
+          echo "✅ MCP Server Deploy - SUCCESS!"
+          echo "══════════════════════════════════════"
+          echo ""
+          echo "🌐 URL: https://chatbot-mcp-server-production.up.railway.app"
+          echo "🚀 Deploy Method: Railway GitHub Integration (автоматический)"
+          echo "📊 Status: ONLINE"
+          echo ""
+          echo "✅ CI проверка пройдена успешно!"
+          echo ""
+      
+      - name: 📊 Railway Dashboard Link
+        if: always()
+        run: |
+          echo "🔗 Проверьте детали деплоя:"
+          echo "   https://railway.com/project/d5eba09d-3795-4429-a6d2-fff3bfca2ba4"

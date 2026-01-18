@@ -1823,3 +1823,4 @@ if __name__ == "__main__":
         sync_scheduler.stop()
         server.shutdown()
         print("✅ Сервер остановлен")
+

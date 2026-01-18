@@ -1,3 +1,6 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -21,14 +24,15 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    // Signing configuration для release build
+    // Signing configuration для release build (только для CI/CD)
+    // Для локальной разработки не требуется
+    /*
     signingConfigs {
         create("release") {
-            // Чтение из keystore.properties (создается в CI/CD)
             val keystorePropertiesFile = rootProject.file("keystore.properties")
             if (keystorePropertiesFile.exists()) {
-                val keystoreProperties = java.util.Properties()
-                keystoreProperties.load(keystorePropertiesFile.inputStream())
+                val keystoreProperties = Properties()
+                keystoreProperties.load(FileInputStream(keystorePropertiesFile))
                 
                 storeFile = file(keystoreProperties.getProperty("storeFile"))
                 storePassword = keystoreProperties.getProperty("storePassword")
@@ -37,6 +41,7 @@ android {
             }
         }
     }
+    */
 
     buildTypes {
         release {
@@ -46,11 +51,14 @@ android {
                 "proguard-rules.pro"
             )
             
-            // Применяем signing config если доступен
+            // Signing config применяется только в CI/CD
+            // Для локальной разработки не требуется
+            /*
             val keystorePropertiesFile = rootProject.file("keystore.properties")
             if (keystorePropertiesFile.exists()) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            */
         }
     }
     compileOptions {

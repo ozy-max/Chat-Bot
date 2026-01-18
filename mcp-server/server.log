@@ -712,3 +712,179 @@
 ✅ OK
 📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/ProjectScanner.kt'}}
 ✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/TermuxService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/FileManagerService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/SupportService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/AdbWifiService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/McpServer.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/FileStorageService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/ScriptAutomationService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/ProjectDocsService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/WebSearchService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/AdbService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/PipelineAgent.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/SchedulerManager.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/TaskRepository.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/SystemMonitorService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/TodoistService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/TokenStats.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/ComparisonModels.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/YandexGptModels.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/ConversationCompression.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/ClaudeModels.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/Message.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/TextChunker.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/EmbeddingService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/OllamaRAGService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/VectorStorage.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/DocumentIndexService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/OllamaClient.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/model/RagConfig.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/api/YandexGptApiService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/api/RetrofitClient.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/api/ClaudeApiService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/service/RerankerService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/data/DeviceInfoProvider.kt'}}
+✅ OK
+📨 initialize {'capabilities': {}, 'clientInfo': {'name': 'ChatBot-Android', 'version': '1.0.0'}, 'protocolVersion': '2024-11-05'}
+✅ OK
+📨 notifications/initialized 
+✅ OK
+📨 tools/call {'name': 'local_list_kotlin_files', 'arguments': {'project_path': '/Users/igorurev/FlutterProjects/ChatBot'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/androidTest/java/com/test/chatbot/ExampleInstrumentedTest.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/test/java/com/test/chatbot/ExampleUnitTest.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/MainActivity.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/ChatBotApplication.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/ui/theme/Color.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/ui/theme/Theme.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/ui/theme/Type.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/repository/ChatRepository.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/utils/ToolsUtils.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/utils/MessageBridge.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/utils/SystemPrompts.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/utils/TestUtils.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/utils/NotificationHelper.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/McpClient.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/McpDemo.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/McpModels.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/ProjectScanner.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/TermuxService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/FileManagerService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/SupportService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/AdbWifiService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/McpServer.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/FileStorageService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/ScriptAutomationService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/ProjectDocsService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/WebSearchService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/AdbService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/PipelineAgent.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/SchedulerManager.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/TaskRepository.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/SystemMonitorService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/mcp/server/TodoistService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/TokenStats.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/ComparisonModels.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/YandexGptModels.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/ConversationCompression.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/ClaudeModels.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/models/Message.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/TextChunker.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/EmbeddingService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/OllamaRAGService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/VectorStorage.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/DocumentIndexService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/rag/OllamaClient.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/model/RagConfig.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/api/YandexGptApiService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/api/RetrofitClient.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/api/ClaudeApiService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/service/RerankerService.kt'}}
+✅ OK
+📨 tools/call {'name': 'local_get_file_content', 'arguments': {'file_path': '/Users/igorurev/FlutterProjects/ChatBot/app/src/main/java/com/test/chatbot/data/DeviceInfoProvider.kt'}}
+✅ OK
+⏰ Следующая синхронизация через 30 минут
+⏰ Следующая синхронизация через 30 минут
+
+==================================================

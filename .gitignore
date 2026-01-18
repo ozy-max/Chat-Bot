@@ -13,3 +13,19 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Keystore files (для безопасности)
+*.jks
+*.keystore
+keystore.properties
+keystore_base64.txt
+
+# MCP Server
+mcp-server/*.log
+mcp-server/*.db
+mcp-server/data/
+mcp-server/logs/
+mcp-server/.env
+
+# Docker
+.dockerignore

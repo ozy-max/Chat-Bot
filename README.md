@@ -12,6 +12,7 @@
 ## 📋 Содержание
 
 - [Основные возможности](#-основные-возможности)
+- [🚀 CI/CD Пайплайны](#-cicd-пайплайны)
 - [Архитектура](#-архитектура)
 - [Установка](#-установка)
 - [Быстрый старт](#-быстрый-старт)
@@ -68,6 +69,39 @@
 - Поиск информации в реальном времени
 - Интеграция с web sources
 - Pipeline анализ результатов
+
+---
+
+## 🚀 CI/CD Пайплайны
+
+### 📱 Android → Google Play Store
+**Автоматическая публикация приложения**
+- ✅ Сборка signed APK/AAB при создании тега
+- ✅ Загрузка в Google Play Console (Internal Testing)
+- ✅ GitHub Release с артефактами
+- ✅ Полная автоматизация
+
+```bash
+git tag v1.0.0 && git push origin v1.0.0
+# 🎉 APK/AAB в Play Store автоматически!
+```
+
+### 🐍 Python MCP Server → Cloud
+**Автоматический деплой MCP сервера**
+- ✅ Деплой при изменениях в `mcp-server/**`
+- ✅ Railway / Render / Docker+VPS
+- ✅ Docker образ в Docker Hub
+- ✅ SSH деплой на VPS
+
+```bash
+cd mcp-server && vim server.py
+git commit -am "Update" && git push
+# 🎉 Сервер задеплоен!
+```
+
+### 📚 Документация
+- 🚀 **Быстрый старт**: [PIPELINES_QUICKSTART.md](./PIPELINES_QUICKSTART.md)
+- 📖 **Полная инструкция**: [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 ---
 

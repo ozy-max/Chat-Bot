@@ -1,0 +1,160 @@
+name: 🐍 Deploy MCP Server to Cloud
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'mcp-server/**'
+  workflow_dispatch:  # Ручной запуск
+
+jobs:
+  # Опция 1: Деплой на Railway
+  deploy-railway:
+    name: 🚂 Deploy to Railway
+    runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_PLATFORM == 'railway' || !vars.DEPLOY_PLATFORM }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🚂 Deploy to Railway
+        uses: bervProject/railway-deploy@main
+        with:
+          railway_token: ${{ secrets.RAILWAY_TOKEN }}
+          service: mcp-server
+        env:
+          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          PORT: 3000
+      
+      - name: ✅ Success
+        run: |
+          echo "✅ MCP Server успешно задеплоен на Railway!"
+          echo "🌐 URL: https://mcp-server.railway.app"
+
+  # Опция 2: Деплой на Render
+  deploy-render:
+    name: 🎨 Deploy to Render
+    runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_PLATFORM == 'render' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🎨 Deploy to Render
+        uses: johnbeynon/render-deploy-action@v0.0.8
+        with:
+          service-id: ${{ secrets.RENDER_SERVICE_ID }}
+          api-key: ${{ secrets.RENDER_API_KEY }}
+      
+      - name: ✅ Success
+        run: |
+          echo "✅ MCP Server успешно задеплоен на Render!"
+          echo "🌐 URL: https://mcp-server.onrender.com"
+
+  # Опция 3: Docker Hub + VPS Deploy
+  build-and-push-docker:
+    name: 🐳 Build & Push Docker Image
+    runs-on: ubuntu-latest
+    if: ${{ vars.DEPLOY_PLATFORM == 'docker' }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+      
+      - name: 🔑 Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      
+      - name: 🏗️ Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./mcp-server
+          file: ./mcp-server/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-mcp-server:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-mcp-server:${{ github.sha }}
+      
+      - name: 📊 Image Info
+        run: |
+          echo "✅ Docker образ собран и загружен!"
+          echo "🐳 Image: ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-mcp-server:latest"
+          echo ""
+          echo "📝 Команда для запуска на VPS:"
+          echo "docker pull ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-mcp-server:latest"
+          echo "docker run -d -p 3000:3000 \\"
+          echo "  -e TODOIST_API_TOKEN=your_token \\"
+          echo "  -e GITHUB_TOKEN=your_token \\"
+          echo "  ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-mcp-server:latest"
+
+  # Опция 4: Deploy to VPS via SSH
+  deploy-vps:
+    name: 💻 Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build-and-push-docker
+    if: ${{ vars.DEPLOY_PLATFORM == 'docker' && secrets.VPS_HOST }}
+    
+    steps:
+      - name: 🔐 Deploy to VPS via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            # Остановка старого контейнера
+            docker stop chatbot-mcp-server || true
+            docker rm chatbot-mcp-server || true
+            
+            # Загрузка нового образа
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-mcp-server:latest
+            
+            # Запуск нового контейнера
+            docker run -d \
+              --name chatbot-mcp-server \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              -e TODOIST_API_TOKEN=${{ secrets.TODOIST_API_TOKEN }} \
+              -e GITHUB_TOKEN=${{ secrets.GH_TOKEN }} \
+              -v /opt/chatbot-data:/app/data \
+              ${{ secrets.DOCKERHUB_USERNAME }}/chatbot-mcp-server:latest
+            
+            # Проверка статуса
+            sleep 5
+            docker ps | grep chatbot-mcp-server
+            
+            echo "✅ Деплой на VPS завершен!"
+      
+      - name: 🏥 Health Check
+        run: |
+          sleep 10
+          curl -f http://${{ secrets.VPS_HOST }}:3000/ || echo "⚠️ Health check failed"
+
+  # Notify
+  notify:
+    name: 📢 Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [deploy-railway, deploy-render, deploy-vps]
+    if: always()
+    
+    steps:
+      - name: 📊 Summary
+        run: |
+          echo "## 📊 Деплой MCP Server"
+          echo ""
+          if [ "${{ needs.deploy-railway.result }}" == "success" ]; then
+            echo "✅ Railway: Успешно"
+          elif [ "${{ needs.deploy-render.result }}" == "success" ]; then
+            echo "✅ Render: Успешно"
+          elif [ "${{ needs.deploy-vps.result }}" == "success" ]; then
+            echo "✅ VPS: Успешно"
+          else
+            echo "❌ Деплой не выполнен или провален"
+          fi

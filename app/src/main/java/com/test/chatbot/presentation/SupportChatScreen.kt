@@ -271,39 +271,6 @@ fun SupportTabContent(
             }
         }
         
-        // Подсказка по командам (если чат пустой или только приветствие)
-        if (uiState.messages.size <= 1) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                color = Color(0xFF1A1A1A),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp)
-                ) {
-                    Text(
-                        text = "💡 Быстрые команды:",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = AccentYellow
-                    )
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = "• /tickets - мои тикеты\n" +
-                               "• /ticket <описание> - создать тикет\n" +
-                               "• /status TICKET-001 - детали тикета\n" +
-                               "• /user - моя информация\n" +
-                               "• /stats - статистика",
-                        fontSize = 11.sp,
-                        color = Color(0xFFAAAAAA),
-                        lineHeight = 16.sp
-                    )
-                }
-            }
-        }
-        
         // Поле ввода
         Surface(
             modifier = Modifier.fillMaxWidth(),

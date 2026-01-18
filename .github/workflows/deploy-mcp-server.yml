@@ -1,12 +1,16 @@
 name: 🐍 Deploy MCP Server to Cloud
 
+# ОТКЛЮЧЕН: Railway деплоит автоматически через GitHub Integration
+# Этот пайплайн оставлен для справки и альтернативных платформ (Render/VPS)
+
 on:
   # push:
   #   branches:
   #     - main
   #   paths:
   #     - 'mcp-server/**'
-  workflow_dispatch:  # Ручной запуск (только вручную, т.к. Railway деплоит через GitHub Integration)
+  # workflow_dispatch:  # Отключен, так как Railway работает через GitHub Integration
+  workflow_call:  # Может быть вызван из другого workflow при необходимости
 
 jobs:
   # Опция 1: Деплой на Railway

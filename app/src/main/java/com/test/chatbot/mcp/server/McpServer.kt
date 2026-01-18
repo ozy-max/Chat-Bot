@@ -2547,7 +2547,7 @@ class McpServer(
             val requestBody = jsonRpcRequest.toString().toRequestBody("application/json".toMediaTypeOrNull())
             
             val request = Request.Builder()
-                .url("http://10.0.2.2:3000/mcp")  // 10.0.2.2 это localhost для Android эмулятора
+                .url("https://chatbot-mcp-server-production.up.railway.app/mcp")  // Railway deployment
                 .post(requestBody)
                 .addHeader("Content-Type", "application/json")
                 .build()

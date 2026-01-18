@@ -27,8 +27,8 @@ class SupportChatViewModel(
     // MCP клиент для вызова support tools
     private var mcpClient: com.test.chatbot.mcp.McpClient? = null
     
-    // URL MCP сервера
-    private val mcpServerUrl = "http://10.0.2.2:3000/mcp"
+    // URL MCP сервера (Railway deployment)
+    private val mcpServerUrl = "https://chatbot-mcp-server-production.up.railway.app/mcp"
     
     // User preferences для получения данных пользователя
     private val userPreferences = UserPreferences(context)

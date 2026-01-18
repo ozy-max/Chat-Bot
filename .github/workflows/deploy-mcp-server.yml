@@ -1,12 +1,12 @@
 name: 🐍 Deploy MCP Server to Cloud
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'mcp-server/**'
-  workflow_dispatch:  # Ручной запуск
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'mcp-server/**'
+  workflow_dispatch:  # Ручной запуск (только вручную, т.к. Railway деплоит через GitHub Integration)
 
 jobs:
   # Опция 1: Деплой на Railway

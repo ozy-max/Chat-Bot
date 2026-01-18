@@ -19,20 +19,102 @@ jobs:
       - name: 📥 Checkout code
         uses: actions/checkout@v4
       
-      - name: 🚂 Deploy to Railway
-        uses: bervProject/railway-deploy@main
-        with:
-          railway_token: ${{ secrets.RAILWAY_TOKEN }}
-          service: mcp-server
+      - name: 🔧 Install Railway CLI
+        run: |
+          npm install -g @railway/cli
+          railway --version
+      
+      - name: 🔐 Railway Login
+        run: |
+          export RAILWAY_TOKEN="${{ secrets.RAILWAY_TOKEN }}"
+          railway whoami
         env:
-          TODOIST_API_TOKEN: ${{ secrets.TODOIST_API_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-          PORT: 3000
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      
+      - name: 🏗️ Create/Link Railway Project
+        run: |
+          cd mcp-server
+          
+          # Проверяем, существует ли проект
+          if ! railway status 2>/dev/null; then
+            echo "📦 Создаю новый проект в Railway..."
+            
+            # Создаём новый проект
+            railway init --name chatbot-mcp-server
+            
+            echo "✅ Проект создан!"
+          else
+            echo "✅ Проект уже существует"
+          fi
+          
+          railway status
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      
+      - name: ⚙️ Configure Environment Variables
+        run: |
+          cd mcp-server
+          
+          echo "🔧 Настраиваю переменные окружения..."
+          
+          railway variables set PORT=3000
+          
+          if [ -n "${{ secrets.TODOIST_API_TOKEN }}" ]; then
+            railway variables set TODOIST_API_TOKEN="${{ secrets.TODOIST_API_TOKEN }}"
+            echo "✅ TODOIST_API_TOKEN установлен"
+          fi
+          
+          if [ -n "${{ secrets.GH_TOKEN }}" ]; then
+            railway variables set GITHUB_TOKEN="${{ secrets.GH_TOKEN }}"
+            echo "✅ GITHUB_TOKEN установлен"
+          fi
+          
+          echo "✅ Переменные окружения настроены!"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      
+      - name: 🚀 Deploy to Railway
+        run: |
+          cd mcp-server
+          
+          echo "🚀 Деплою на Railway..."
+          railway up --detach
+          
+          echo "✅ Деплой запущен!"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      
+      - name: 🌐 Get Deployment URL
+        id: railway-url
+        run: |
+          cd mcp-server
+          
+          # Ждём немного, чтобы деплой начался
+          sleep 5
+          
+          # Получаем URL (может потребоваться настройка домена в Railway UI)
+          URL=$(railway domain 2>/dev/null || echo "https://chatbot-mcp-server.up.railway.app")
+          
+          echo "url=$URL" >> $GITHUB_OUTPUT
+          echo "🌐 Deployment URL: $URL"
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
       
       - name: ✅ Success
         run: |
-          echo "✅ MCP Server успешно задеплоен на Railway!"
-          echo "🌐 URL: https://mcp-server.railway.app"
+          echo "## ✅ MCP Server успешно задеплоен на Railway!"
+          echo ""
+          echo "🌐 **URL**: ${{ steps.railway-url.outputs.url }}"
+          echo ""
+          echo "📝 **Следующие шаги:**"
+          echo "1. Проверьте деплой в Railway Dashboard: https://railway.app/"
+          echo "2. Настройте Custom Domain (опционально)"
+          echo "3. Обновите URL в Android приложении"
+          echo ""
+          echo "🔧 **Переменные окружения:**"
+          echo "- PORT: 3000"
+          echo "- TODOIST_API_TOKEN: ✅"
+          echo "- GITHUB_TOKEN: ${{ secrets.GH_TOKEN && '✅' || '⚠️ Не установлен' }}"
 
   # Опция 2: Деплой на Render
   deploy-render:

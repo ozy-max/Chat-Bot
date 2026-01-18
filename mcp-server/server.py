@@ -2,7 +2,7 @@
 """
 MCP HTTP Server с системой напоминаний и агентом 24/7
 Запуск: python3 server.py
-Version: 1.0.1 (Cleanup: removed documentation .md files)
+Version: 1.0.2 (New CI workflow for deployment checks)
 """
 
 import sys

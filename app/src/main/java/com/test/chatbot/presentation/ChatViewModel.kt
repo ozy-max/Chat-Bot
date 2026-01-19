@@ -8,6 +8,7 @@ import com.test.chatbot.data.PreferencesRepository
 import com.test.chatbot.data.memory.MemoryRepository
 import com.test.chatbot.data.memory.MemoryState
 import com.test.chatbot.models.*
+import com.test.chatbot.rag.OllamaClient
 import com.test.chatbot.repository.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,6 +33,11 @@ class ChatViewModel(
     private val claudeHistory = mutableListOf<ClaudeMessage>()
     // История для YandexGPT
     private val yandexHistory = mutableListOf<YandexGptMessage>()
+    // История для Ollama (простой список строк - user/assistant messages)
+    private val ollamaHistory = mutableListOf<Pair<String, String>>() // Pair(role, content)
+    
+    // Ollama client
+    private val ollamaClient = OllamaClient()
     
     // Хранение summary для компрессии
     private var currentSummary: String? = null
@@ -145,6 +151,11 @@ class ChatViewModel(
                         _uiState.value.yandexFolderId,
                         pendingMessages.map { YandexGptMessage(role = "user", text = it) }
                     )
+                    AiProvider.OLLAMA -> {
+                        // Для Ollama просто объединяем сообщения
+                        val summary = pendingMessages.joinToString("\n")
+                        Result.success(AiResponse(text = summary))
+                    }
                 }
                 
                 summaryResult.onSuccess { result ->
@@ -467,6 +478,73 @@ class ChatViewModel(
         }
     }
     
+    private suspend fun sendToOllama() {
+        // Получаем контекст памяти
+        val memoryContext = getMemoryContext()
+        
+        // Формируем полный промпт с историей и контекстом
+        val historyContext = if (ollamaHistory.isNotEmpty()) {
+            ollamaHistory.takeLast(10).joinToString("\n\n") { (role, content) ->
+                when (role) {
+                    "user" -> "Пользователь: $content"
+                    "assistant" -> "Ассистент: $content"
+                    else -> content
+                }
+            }
+        } else {
+            ""
+        }
+        
+        val currentUserMessage = ollamaHistory.lastOrNull { it.first == "user" }?.second ?: ""
+        
+        val fullPrompt = buildString {
+            if (memoryContext.isNotBlank()) {
+                appendLine("Контекст из памяти:")
+                appendLine(memoryContext)
+                appendLine()
+            }
+            if (historyContext.isNotBlank()) {
+                appendLine("История диалога:")
+                appendLine(historyContext)
+                appendLine()
+            }
+            append("Вопрос: $currentUserMessage")
+        }
+        
+        // Отправляем запрос к Ollama
+        val result = ollamaClient.generateText(
+            prompt = fullPrompt,
+            temperature = _uiState.value.temperature,
+            maxTokens = _uiState.value.maxTokens
+        )
+        
+        result.onSuccess { responseText ->
+            // Добавляем ответ в историю
+            ollamaHistory.add(Pair("assistant", responseText))
+            
+            // Показываем ответ (без статистики токенов, так как Ollama не возвращает эту информацию)
+            val botMessage = Message(
+                text = responseText.ifEmpty { "Получен пустой ответ от Ollama" },
+                isUser = false,
+                provider = AiProvider.OLLAMA
+            )
+            
+            _uiState.update { 
+                it.copy(
+                    messages = _uiState.value.messages + botMessage,
+                    isLoading = false
+                ) 
+            }
+        }.onFailure { exception ->
+            _uiState.update { 
+                it.copy(
+                    error = "Ошибка Ollama: ${exception.message}",
+                    isLoading = false
+                ) 
+            }
+        }
+    }
+    
     private fun clearChat() {
         // Сохраняем summary текущего диалога перед очисткой (если включена память)
         if (_uiState.value.memoryState.isEnabled && _uiState.value.messages.isNotEmpty()) {
@@ -522,6 +600,11 @@ class ChatViewModel(
                             text = it.text
                         )}
                     )
+                    AiProvider.OLLAMA -> {
+                        // Для Ollama просто объединяем сообщения
+                        val summary = userMessages.joinToString("\n") { it.text }
+                        Result.success(AiResponse(text = summary))
+                    }
                 }
                 
                 summaryResult.onSuccess { result ->
@@ -728,6 +811,7 @@ class ChatViewModel(
         val historySize = when (_uiState.value.selectedProvider) {
             AiProvider.CLAUDE -> claudeHistory.size
             AiProvider.YANDEX_GPT -> yandexHistory.filter { it.role != "system" }.size
+            AiProvider.OLLAMA -> ollamaHistory.size
         }
         
         if (historySize >= settings.threshold) {
@@ -757,6 +841,7 @@ class ChatViewModel(
             when (provider) {
                 AiProvider.CLAUDE -> compressClaudeHistory(settings)
                 AiProvider.YANDEX_GPT -> compressYandexHistory(settings)
+                AiProvider.OLLAMA -> compressOllamaHistory()
             }
         } catch (e: Exception) {
             Log.e("ChatViewModel", "Compression error: ${e.message}")
@@ -877,6 +962,22 @@ class ChatViewModel(
                 ) 
             }
         }
+    }
+    
+    private suspend fun compressOllamaHistory() {
+        if (ollamaHistory.size < 12) {
+            _uiState.update { it.copy(isCompressing = false) }
+            return
+        }
+        
+        // Для Ollama просто оставляем последние 10 сообщений
+        val recentMessages = ollamaHistory.takeLast(10)
+        ollamaHistory.clear()
+        ollamaHistory.addAll(recentMessages)
+        
+        // Сбрасываем счетчик
+        messagesSinceCompression = 0
+        _uiState.update { it.copy(isCompressing = false) }
     }
     
     /**
@@ -1528,6 +1629,10 @@ class ChatViewModel(
                 }
                 yandexHistory.add(YandexGptMessage(role = "user", text = prompt))
                 sendToYandexGpt()
+            }
+            AiProvider.OLLAMA -> {
+                ollamaHistory.add(Pair("user", prompt))
+                sendToOllama()
             }
         }
     }
@@ -2349,6 +2454,17 @@ class ChatViewModel(
                 
                 yandexHistory.add(YandexGptMessage(role = "user", text = messageText))
                 sendToYandexGpt()
+            }
+            AiProvider.OLLAMA -> {
+                // Добавляем вопрос с историей если нужно
+                val messageText = if (history.isNotEmpty() && history.contains("Пользователь:")) {
+                    "$history\n\nТекущий вопрос: $question"
+                } else {
+                    question
+                }
+                
+                ollamaHistory.add(Pair("user", messageText))
+                sendToOllama()
             }
         }
     }

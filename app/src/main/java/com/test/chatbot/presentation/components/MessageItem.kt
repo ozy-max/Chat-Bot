@@ -42,6 +42,7 @@ fun MessageItem(
         message.isUser -> "Вы"
         message.provider == AiProvider.YANDEX_GPT -> "YandexGPT"
         message.provider == AiProvider.CLAUDE -> "Claude"
+        message.provider == AiProvider.OLLAMA -> "Ollama"
         else -> "AI"
     }
     
@@ -49,6 +50,7 @@ fun MessageItem(
         message.isUser -> AccentBlue
         message.provider == AiProvider.YANDEX_GPT -> Color(0xFFFF5722) // Оранжевый для Яндекса
         message.provider == AiProvider.CLAUDE -> AccentPurple // Фиолетовый для Claude
+        message.provider == AiProvider.OLLAMA -> Color(0xFF00D4AA) // Бирюзовый для Ollama
         else -> AccentYellow
     }
     

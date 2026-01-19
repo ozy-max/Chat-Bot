@@ -119,7 +119,7 @@ fun SettingsDialog(
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     ModelChip(
                         icon = "🟣",
@@ -132,10 +132,19 @@ fun SettingsDialog(
                     
                     ModelChip(
                         icon = "🔴",
-                        name = "YandexGPT",
+                        name = "Yandex",
                         isSelected = selectedProvider == AiProvider.YANDEX_GPT,
                         color = Color(0xFFFF6B35),
                         onClick = { selectedProvider = AiProvider.YANDEX_GPT },
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    ModelChip(
+                        icon = "🦙",
+                        name = "Ollama",
+                        isSelected = selectedProvider == AiProvider.OLLAMA,
+                        color = Color(0xFF00D4AA),
+                        onClick = { selectedProvider = AiProvider.OLLAMA },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -316,10 +325,12 @@ fun SettingsDialog(
                 val maxTokenLimit = when (selectedProvider) {
                     AiProvider.CLAUDE -> 8192
                     AiProvider.YANDEX_GPT -> 2000
+                    AiProvider.OLLAMA -> 2048
                 }
                 val quickTokenButtons = when (selectedProvider) {
                     AiProvider.CLAUDE -> listOf(64, 256, 1024, 4096, 8192)
                     AiProvider.YANDEX_GPT -> listOf(64, 256, 512, 1024, 2000)
+                    AiProvider.OLLAMA -> listOf(64, 256, 512, 1024, 2048)
                 }
                 
                 // Корректируем значение если оно превышает лимит

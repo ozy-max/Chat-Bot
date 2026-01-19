@@ -63,7 +63,8 @@ data class YandexUsage(
 // Enum для выбора AI провайдера
 enum class AiProvider(val displayName: String) {
     CLAUDE("Claude"),
-    YANDEX_GPT("YandexGPT")
+    YANDEX_GPT("YandexGPT"),
+    OLLAMA("Ollama")
 }
 
 

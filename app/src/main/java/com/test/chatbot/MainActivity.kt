@@ -119,6 +119,7 @@ class MainActivity : ComponentActivity() {
                                 ChatScreen(
                                     uiState = uiState,
                                     onUiEvent = viewModel::onUiEvent,
+                                    onCheckOllamaAvailability = { viewModel.checkOllamaAvailability() },
                                     onNavigateToSupport = {
                                         navController.navigate("support_chat")
                                     }

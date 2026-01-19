@@ -35,11 +35,39 @@ fun SettingsDialog(
     onMaxTokensChange: (Int) -> Unit,
     onProviderChange: (AiProvider) -> Unit,
     onDismiss: () -> Unit,
+    onCheckOllamaAvailability: (suspend () -> Boolean)? = null,
     modifier: Modifier = Modifier
 ) {
     var temperature by remember { mutableFloatStateOf(currentTemperature.toFloat()) }
     var maxTokens by remember { mutableIntStateOf(currentMaxTokens) }
     var selectedProvider by remember { mutableStateOf(currentProvider) }
+    var showOllamaUnavailableDialog by remember { mutableStateOf(false) }
+    var isCheckingOllama by remember { mutableStateOf(false) }
+    
+    // Проверка доступности Ollama при выборе
+    fun checkOllamaAndSelect() {
+        isCheckingOllama = true
+        kotlinx.coroutines.GlobalScope.launch {
+            val isAvailable = onCheckOllamaAvailability?.invoke() ?: false
+            isCheckingOllama = false
+            if (isAvailable) {
+                selectedProvider = AiProvider.OLLAMA
+            } else {
+                showOllamaUnavailableDialog = true
+            }
+        }
+    }
+    
+    // Диалог с инструкцией по запуску Ollama
+    if (showOllamaUnavailableDialog) {
+        OllamaUnavailableDialog(
+            onDismiss = { showOllamaUnavailableDialog = false },
+            onSelectAnyway = {
+                selectedProvider = AiProvider.OLLAMA
+                showOllamaUnavailableDialog = false
+            }
+        )
+    }
     
     Dialog(
         onDismissRequest = onDismiss,
@@ -144,7 +172,14 @@ fun SettingsDialog(
                         name = "Ollama",
                         isSelected = selectedProvider == AiProvider.OLLAMA,
                         color = Color(0xFF00D4AA),
-                        onClick = { selectedProvider = AiProvider.OLLAMA },
+                        onClick = { 
+                            if (onCheckOllamaAvailability != null && selectedProvider != AiProvider.OLLAMA) {
+                                checkOllamaAndSelect()
+                            } else {
+                                selectedProvider = AiProvider.OLLAMA
+                            }
+                        },
+                        isLoading = isCheckingOllama && selectedProvider != AiProvider.OLLAMA,
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -467,6 +502,7 @@ private fun ModelChip(
     isSelected: Boolean,
     color: Color,
     onClick: () -> Unit,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -491,7 +527,15 @@ private fun ModelChip(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(text = icon, fontSize = 16.sp)
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    color = color,
+                    strokeWidth = 2.dp
+                )
+            } else {
+                Text(text = icon, fontSize = 16.sp)
+            }
             Text(
                 text = name,
                 fontSize = 14.sp,
@@ -570,5 +614,121 @@ private fun QuickTokenButton(
             fontWeight = FontWeight.Bold,
             color = if (isSelected) PureBlack else Color.White.copy(alpha = 0.7f)
         )
+    }
+}
+
+@Composable
+private fun OllamaUnavailableDialog(
+    onDismiss: () -> Unit,
+    onSelectAnyway: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .clip(RoundedCornerShape(20.dp))
+                .background(PureBlack)
+                .border(1.dp, Color(0xFFFF6B6B).copy(alpha = 0.3f), RoundedCornerShape(20.dp))
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Иконка предупреждения
+                Text(
+                    text = "⚠️",
+                    fontSize = 48.sp,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Заголовок
+                Text(
+                    text = "Ollama не запущен",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                // Описание
+                Text(
+                    text = "Ollama сервер недоступен по адресу 192.168.0.198:11434",
+                    fontSize = 14.sp,
+                    color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Инструкция
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Color(0xFF1A1A1A))
+                        .border(1.dp, AccentYellow.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+                        .padding(16.dp)
+                ) {
+                    Column {
+                        Text(
+                            text = "💡 Как запустить:",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = AccentYellow,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                        Text(
+                            text = "1. Откройте терминал на Mac\n" +
+                                   "2. Перейдите в папку проекта\n" +
+                                   "3. Выполните команду:\n\n" +
+                                   "   ./start_ollama.sh\n\n" +
+                                   "4. Подождите 3-5 секунд",
+                            fontSize = 13.sp,
+                            color = Color.White.copy(alpha = 0.8f),
+                            lineHeight = 18.sp
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                // Кнопки
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onDismiss,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = Color.White.copy(alpha = 0.7f)
+                        ),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF333333))
+                    ) {
+                        Text("Отмена", fontWeight = FontWeight.Medium)
+                    }
+                    
+                    Button(
+                        onClick = onSelectAnyway,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFFFF6B6B),
+                            contentColor = Color.White
+                        )
+                    ) {
+                        Text("Выбрать всё равно", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
     }
 }

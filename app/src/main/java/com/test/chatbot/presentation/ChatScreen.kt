@@ -47,6 +47,7 @@ import androidx.lifecycle.LifecycleEventObserver
 fun ChatScreen(
     uiState: ChatUiState,
     onUiEvent: (ChatUiEvents) -> Unit,
+    onCheckOllamaAvailability: (suspend () -> Boolean)? = null,
     onNavigateToSupport: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -113,7 +114,8 @@ fun ChatScreen(
             onTemperatureChange = { onUiEvent(ChatUiEvents.UpdateTemperature(it)) },
             onMaxTokensChange = { onUiEvent(ChatUiEvents.UpdateMaxTokens(it)) },
             onProviderChange = { onUiEvent(ChatUiEvents.UpdateProvider(it)) },
-            onDismiss = { onUiEvent(ChatUiEvents.DismissSettingsDialog) }
+            onDismiss = { onUiEvent(ChatUiEvents.DismissSettingsDialog) },
+            onCheckOllamaAvailability = onCheckOllamaAvailability
         )
     }
     

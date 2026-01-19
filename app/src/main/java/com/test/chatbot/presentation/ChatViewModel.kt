@@ -39,6 +39,18 @@ class ChatViewModel(
     // Ollama client
     private val ollamaClient = OllamaClient()
     
+    /**
+     * Проверить доступность Ollama сервера
+     */
+    suspend fun checkOllamaAvailability(): Boolean {
+        return try {
+            ollamaClient.isAvailable()
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Ошибка проверки Ollama: ${e.message}")
+            false
+        }
+    }
+    
     // Хранение summary для компрессии
     private var currentSummary: String? = null
     // Счетчик сообщений с момента последней компрессии

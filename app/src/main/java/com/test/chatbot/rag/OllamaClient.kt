@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit
  * Документация: https://github.com/ollama/ollama/blob/main/docs/api.md
  */
 class OllamaClient(
-    private var baseUrl: String = "http://192.168.1.100:11434"
+    private var baseUrl: String = "http://192.168.0.198:11434"
 ) {
     
     companion object {

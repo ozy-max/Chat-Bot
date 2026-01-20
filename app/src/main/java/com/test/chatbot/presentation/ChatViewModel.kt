@@ -164,9 +164,15 @@ class ChatViewModel(
                         pendingMessages.map { YandexGptMessage(role = "user", text = it) }
                     )
                     AiProvider.OLLAMA -> {
-                        // Для Ollama просто объединяем сообщения
+                        // Для Ollama просто объединяем сообщения (без суммаризации)
                         val summary = pendingMessages.joinToString("\n")
-                        Result.success(AiResponse(text = summary))
+                        Result.success(CompressionResult(
+                            success = true,
+                            summary = summary,
+                            originalMessages = pendingMessages.size,
+                            originalTokens = summary.length / 4,
+                            compressedTokens = summary.length / 4
+                        ))
                     }
                 }
                 
@@ -613,9 +619,15 @@ class ChatViewModel(
                         )}
                     )
                     AiProvider.OLLAMA -> {
-                        // Для Ollama просто объединяем сообщения
+                        // Для Ollama просто объединяем сообщения (без суммаризации)
                         val summary = userMessages.joinToString("\n") { it.text }
-                        Result.success(AiResponse(text = summary))
+                        Result.success(CompressionResult(
+                            success = true,
+                            summary = summary,
+                            originalMessages = userMessages.size,
+                            originalTokens = summary.length / 4,
+                            compressedTokens = summary.length / 4
+                        ))
                     }
                 }
                 

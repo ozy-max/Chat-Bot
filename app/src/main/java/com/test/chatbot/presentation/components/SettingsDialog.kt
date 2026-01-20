@@ -24,6 +24,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.test.chatbot.models.AiProvider
 import com.test.chatbot.ui.theme.AccentYellow
 import com.test.chatbot.ui.theme.PureBlack
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 @Composable
@@ -44,10 +45,12 @@ fun SettingsDialog(
     var showOllamaUnavailableDialog by remember { mutableStateOf(false) }
     var isCheckingOllama by remember { mutableStateOf(false) }
     
+    val coroutineScope = rememberCoroutineScope()
+    
     // Проверка доступности Ollama при выборе
     fun checkOllamaAndSelect() {
         isCheckingOllama = true
-        kotlinx.coroutines.GlobalScope.launch {
+        coroutineScope.launch {
             val isAvailable = onCheckOllamaAvailability?.invoke() ?: false
             isCheckingOllama = false
             if (isAvailable) {
@@ -657,7 +660,7 @@ private fun OllamaUnavailableDialog(
                 
                 // Описание
                 Text(
-                    text = "Ollama сервер недоступен по адресу 192.168.0.198:11434",
+                    text = "Ollama сервер недоступен по адресу 10.0.2.2:11434",
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 16.dp)

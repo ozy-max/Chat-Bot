@@ -660,7 +660,7 @@ private fun OllamaUnavailableDialog(
                 
                 // Описание
                 Text(
-                    text = "Ollama сервер недоступен по адресу 192.168.0.198:11434",
+                    text = "Ollama сервер недоступен по адресу localhost:11434",
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -686,9 +686,11 @@ private fun OllamaUnavailableDialog(
                         Text(
                             text = "1. Откройте терминал на Mac\n" +
                                    "2. Перейдите в папку проекта\n" +
-                                   "3. Выполните команду:\n\n" +
+                                   "3. Запустите Ollama:\n\n" +
                                    "   ./start_ollama.sh\n\n" +
-                                   "4. Подождите 3-5 секунд",
+                                   "4. Настройте ADB reverse:\n\n" +
+                                   "   adb reverse tcp:11434 tcp:11434\n\n" +
+                                   "5. Подождите 3-5 секунд",
                             fontSize = 13.sp,
                             color = Color.White.copy(alpha = 0.8f),
                             lineHeight = 18.sp

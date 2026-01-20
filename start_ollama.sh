@@ -83,8 +83,18 @@ if curl -s http://localhost:11434/api/tags > /dev/null; then
     echo "✅ OLLAMA ГОТОВ К ИСПОЛЬЗОВАНИЮ!"
     echo "═══════════════════════════════════════════════════════════════"
     echo ""
+    
+    # Настройка ADB reverse для эмулятора
+    echo "🔧 Настройка ADB reverse для эмулятора..."
+    if command -v adb &> /dev/null; then
+        adb reverse tcp:11434 tcp:11434 2>/dev/null && echo "✅ ADB reverse настроен (localhost:11434)" || echo "⚠️  ADB reverse не настроен (эмулятор не запущен?)"
+    else
+        echo "⚠️  ADB не найден (установите Android SDK)"
+    fi
+    echo ""
+    
     echo "🌐 URL для Android приложения:"
-    echo "   http://$LOCAL_IP:11434"
+    echo "   http://localhost:11434 (через ADB reverse)"
     echo ""
     echo "📝 Логи сервера:"
     echo "   tail -f /tmp/ollama_server.log"

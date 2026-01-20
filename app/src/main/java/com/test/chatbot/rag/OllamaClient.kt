@@ -15,11 +15,14 @@ import java.util.concurrent.TimeUnit
  * Клиент для работы с Ollama API
  * Документация: https://github.com/ollama/ollama/blob/main/docs/api.md
  * 
- * Использует 10.0.2.2 - специальный IP для доступа к localhost хоста из Android эмулятора
- * Работает БЕЗ интернета, только локальная сеть с Mac
+ * Использует локальный IP Mac для доступа к Ollama из Android эмулятора
+ * Работает БЕЗ интернета, только локальная сеть Mac ↔ Эмулятор
+ * 
+ * ВАЖНО: Ollama должен быть запущен с OLLAMA_HOST=0.0.0.0:11434
+ * Запуск: ./start_ollama.sh
  */
 class OllamaClient(
-    private var baseUrl: String = "http://10.0.2.2:11434"
+    private var baseUrl: String = "http://192.168.0.198:11434"
 ) {
     
     companion object {

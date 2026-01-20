@@ -660,7 +660,7 @@ private fun OllamaUnavailableDialog(
                 
                 // Описание
                 Text(
-                    text = "Ollama сервер недоступен по адресу 10.0.2.2:11434",
+                    text = "Ollama сервер недоступен по адресу 192.168.0.198:11434",
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.7f),
                     modifier = Modifier.padding(bottom = 16.dp)

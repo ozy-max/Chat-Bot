@@ -160,8 +160,19 @@ def chat():
         
         logger.info(f"💬 Chat request: model={model}, message_length={len(message)}")
         
+        # Системный промпт - отвечать на том же языке что и вопрос
+        system_prompt = """You are a helpful AI assistant.
+
+IMPORTANT RULE: Always respond in the SAME LANGUAGE as the user's question.
+- If the user asks in Russian, respond in Russian.
+- If the user asks in English, respond in English.
+- Be polite, clear, and informative.
+
+Let's begin:
+"""
+        
         # Формируем промпт с учетом истории
-        full_prompt = ""
+        full_prompt = system_prompt
         
         if history:
             for msg in history:

@@ -36,15 +36,32 @@ class ChatViewModel(
     // История для Ollama (простой список строк - user/assistant messages)
     private val ollamaHistory = mutableListOf<Pair<String, String>>() // Pair(role, content)
     
-    // Ollama client
+    // Прямое подключение к Ollama (legacy)
     private val ollamaClient = OllamaClient()
+    
+    // API клиент для удаленного Ollama сервера
+    private val ollamaApiClient = com.test.chatbot.api.OllamaApiClient()
     
     /**
      * Проверить доступность Ollama сервера
+     * Проверяет сначала API сервер, потом прямое подключение
      */
     suspend fun checkOllamaAvailability(): Boolean {
         return try {
-            ollamaClient.isAvailable()
+            // Проверяем API сервер
+            val apiAvailable = ollamaApiClient.isAvailable()
+            if (apiAvailable) {
+                Log.i("ChatViewModel", "✅ Ollama API сервер доступен (localhost:8080)")
+                return true
+            }
+            
+            // Fallback на прямое подключение
+            val directAvailable = ollamaClient.isAvailable()
+            if (directAvailable) {
+                Log.i("ChatViewModel", "✅ Ollama прямое подключение доступно (localhost:11434)")
+            }
+            
+            directAvailable
         } catch (e: Exception) {
             Log.e("ChatViewModel", "Ошибка проверки Ollama: ${e.message}")
             false
@@ -500,63 +517,139 @@ class ChatViewModel(
         // Получаем контекст памяти
         val memoryContext = getMemoryContext()
         
-        // Формируем полный промпт с историей и контекстом
-        val historyContext = if (ollamaHistory.isNotEmpty()) {
-            ollamaHistory.takeLast(10).joinToString("\n\n") { (role, content) ->
-                when (role) {
-                    "user" -> "Пользователь: $content"
-                    "assistant" -> "Ассистент: $content"
-                    else -> content
-                }
-            }
-        } else {
-            ""
-        }
-        
+        // Получаем текущее сообщение пользователя
         val currentUserMessage = ollamaHistory.lastOrNull { it.first == "user" }?.second ?: ""
         
-        val fullPrompt = buildString {
-            if (memoryContext.isNotBlank()) {
-                appendLine("Контекст из памяти:")
-                appendLine(memoryContext)
-                appendLine()
+        // Формируем историю для API (последние 10 сообщений без контекста памяти)
+        val apiHistory = ollamaHistory
+            .takeLast(20) // Берем последние 20 сообщений (10 пар)
+            .map { (role, content) ->
+                com.test.chatbot.api.OllamaApiClient.ChatMessage(
+                    role = role,
+                    content = content
+                )
             }
-            if (historyContext.isNotBlank()) {
-                appendLine("История диалога:")
-                appendLine(historyContext)
-                appendLine()
-            }
-            append("Вопрос: $currentUserMessage")
+            .dropLast(1) // Убираем последнее сообщение пользователя (оно будет в message)
+        
+        // Добавляем контекст памяти к сообщению если есть
+        val messageWithContext = if (memoryContext.isNotBlank()) {
+            "Контекст из памяти:\n$memoryContext\n\nВопрос: $currentUserMessage"
+        } else {
+            currentUserMessage
         }
         
-        // Отправляем запрос к Ollama
-        val result = ollamaClient.generateText(
-            prompt = fullPrompt,
+        Log.i("ChatViewModel", "💬 Отправка в Ollama API: message_length=${messageWithContext.length}, history_size=${apiHistory.size}")
+        
+        // Пробуем сначала API сервер
+        var result = ollamaApiClient.chat(
+            message = messageWithContext,
+            model = "llama3",
             temperature = _uiState.value.temperature,
-            maxTokens = _uiState.value.maxTokens
+            maxTokens = _uiState.value.maxTokens,
+            history = apiHistory
         )
         
-        result.onSuccess { responseText ->
-            // Добавляем ответ в историю
-            ollamaHistory.add(Pair("assistant", responseText))
+        // Если API недоступен, fallback на прямое подключение
+        if (result.isFailure) {
+            Log.w("ChatViewModel", "⚠️ API сервер недоступен, fallback на прямое подключение")
             
-            // Показываем ответ (без статистики токенов, так как Ollama не возвращает эту информацию)
+            // Формируем полный промпт для прямого подключения
+            val historyContext = if (ollamaHistory.isNotEmpty()) {
+                ollamaHistory.takeLast(10).joinToString("\n\n") { (role, content) ->
+                    when (role) {
+                        "user" -> "Пользователь: $content"
+                        "assistant" -> "Ассистент: $content"
+                        else -> content
+                    }
+                }
+            } else {
+                ""
+            }
+            
+            val fullPrompt = buildString {
+                if (memoryContext.isNotBlank()) {
+                    appendLine("Контекст из памяти:")
+                    appendLine(memoryContext)
+                    appendLine()
+                }
+                if (historyContext.isNotBlank()) {
+                    appendLine("История диалога:")
+                    appendLine(historyContext)
+                    appendLine()
+                }
+                append("Вопрос: $currentUserMessage")
+            }
+            
+            val directResult = ollamaClient.generateText(
+                prompt = fullPrompt,
+                temperature = _uiState.value.temperature,
+                maxTokens = _uiState.value.maxTokens
+            )
+            
+            directResult.onSuccess { responseText ->
+                ollamaHistory.add(Pair("assistant", responseText))
+                
+                val botMessage = Message(
+                    text = responseText.ifEmpty { "Получен пустой ответ от Ollama" },
+                    isUser = false,
+                    provider = AiProvider.OLLAMA
+                )
+                
+                _uiState.update { 
+                    it.copy(
+                        messages = _uiState.value.messages + botMessage,
+                        isLoading = false
+                    ) 
+                }
+            }.onFailure { exception ->
+                _uiState.update { 
+                    it.copy(
+                        error = "Ошибка Ollama: ${exception.message}",
+                        isLoading = false
+                    ) 
+                }
+            }
+            return
+        }
+        
+        // API сервер ответил
+        result.onSuccess { response ->
+            // Добавляем ответ в историю
+            ollamaHistory.add(Pair("assistant", response.message))
+            
+            Log.i("ChatViewModel", "✅ Ответ получен: tokens=${response.totalTokens}, time=${response.generationTime}s")
+            
+            // Обновляем статистику токенов
+            val currentStats = _uiState.value.tokenStats
+            val newStats = currentStats.copy(
+                lastInputTokens = response.inputTokens,
+                lastOutputTokens = response.outputTokens,
+                totalInputTokens = currentStats.totalInputTokens + response.inputTokens,
+                totalOutputTokens = currentStats.totalOutputTokens + response.outputTokens,
+                totalTokens = currentStats.totalTokens + response.totalTokens,
+                requestCount = currentStats.requestCount + 1
+            )
+            
+            // Показываем ответ с токенами
             val botMessage = Message(
-                text = responseText.ifEmpty { "Получен пустой ответ от Ollama" },
+                text = response.message.ifEmpty { "Получен пустой ответ от Ollama API" },
                 isUser = false,
+                inputTokens = response.inputTokens,
+                outputTokens = response.outputTokens,
                 provider = AiProvider.OLLAMA
             )
             
             _uiState.update { 
                 it.copy(
                     messages = _uiState.value.messages + botMessage,
+                    tokenStats = newStats,
                     isLoading = false
                 ) 
             }
         }.onFailure { exception ->
             _uiState.update { 
                 it.copy(
-                    error = "Ошибка Ollama: ${exception.message}",
+                    error = "Ошибка Ollama API: ${exception.message}",
                     isLoading = false
                 ) 
             }

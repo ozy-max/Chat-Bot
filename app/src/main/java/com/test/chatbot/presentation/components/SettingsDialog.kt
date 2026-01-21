@@ -660,9 +660,15 @@ private fun OllamaUnavailableDialog(
                 
                 // Описание
                 Text(
-                    text = "Ollama сервер недоступен по адресу localhost:11434",
+                    text = "Ollama API сервер недоступен (localhost:8080)",
                     fontSize = 14.sp,
                     color = Color.White.copy(alpha = 0.7f),
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                Text(
+                    text = "Также проверен fallback на localhost:11434",
+                    fontSize = 12.sp,
+                    color = Color.White.copy(alpha = 0.5f),
                     modifier = Modifier.padding(bottom = 16.dp)
                 )
                 
@@ -686,11 +692,14 @@ private fun OllamaUnavailableDialog(
                         Text(
                             text = "1. Откройте терминал на Mac\n" +
                                    "2. Перейдите в папку проекта\n" +
-                                   "3. Запустите Ollama:\n\n" +
-                                   "   ./start_ollama.sh\n\n" +
-                                   "4. Настройте ADB reverse:\n\n" +
-                                   "   adb reverse tcp:11434 tcp:11434\n\n" +
-                                   "5. Подождите 3-5 секунд",
+                                   "3. Запустите API сервер:\n\n" +
+                                   "   ./start_ollama_api.sh\n\n" +
+                                   "   (Ollama + API сервер на порту 8080)\n\n" +
+                                   "4. Готово! Приложение автоматически\n" +
+                                   "   подключится к API серверу.\n\n" +
+                                   "💡 API сервер можно развернуть на\n" +
+                                   "   удаленной машине для доступа\n" +
+                                   "   из любого места!",
                             fontSize = 13.sp,
                             color = Color.White.copy(alpha = 0.8f),
                             lineHeight = 18.sp

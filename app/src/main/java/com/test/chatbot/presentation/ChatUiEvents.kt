@@ -1,6 +1,7 @@
 package com.test.chatbot.presentation
 
 import com.test.chatbot.models.AiProvider
+import com.test.chatbot.models.PromptTemplates
 
 sealed interface ChatUiEvents {
     data class SendMessage(val message: String) : ChatUiEvents
@@ -11,6 +12,9 @@ sealed interface ChatUiEvents {
     data class UpdateTemperature(val temperature: Double) : ChatUiEvents
     data class UpdateMaxTokens(val maxTokens: Int) : ChatUiEvents
     data class UpdateProvider(val provider: AiProvider) : ChatUiEvents
+    data class UpdateTaskType(val taskType: PromptTemplates.TaskType) : ChatUiEvents
+    data class UpdateOllamaModel(val model: String) : ChatUiEvents
+    data class UpdateContextWindow(val contextWindow: Int) : ChatUiEvents
     data object ShowApiKeyDialog : ChatUiEvents
     data object DismissApiKeyDialog : ChatUiEvents
     data object ShowSettingsDialog : ChatUiEvents

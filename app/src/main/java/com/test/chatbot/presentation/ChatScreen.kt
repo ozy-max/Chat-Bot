@@ -111,9 +111,15 @@ fun ChatScreen(
             currentTemperature = uiState.temperature,
             currentMaxTokens = uiState.maxTokens,
             currentProvider = uiState.selectedProvider,
+            currentTaskType = uiState.taskType,
+            currentOllamaModel = uiState.ollamaModel,
+            currentContextWindow = uiState.contextWindow,
             onTemperatureChange = { onUiEvent(ChatUiEvents.UpdateTemperature(it)) },
             onMaxTokensChange = { onUiEvent(ChatUiEvents.UpdateMaxTokens(it)) },
             onProviderChange = { onUiEvent(ChatUiEvents.UpdateProvider(it)) },
+            onTaskTypeChange = { onUiEvent(ChatUiEvents.UpdateTaskType(it)) },
+            onOllamaModelChange = { onUiEvent(ChatUiEvents.UpdateOllamaModel(it)) },
+            onContextWindowChange = { onUiEvent(ChatUiEvents.UpdateContextWindow(it)) },
             onDismiss = { onUiEvent(ChatUiEvents.DismissSettingsDialog) },
             onCheckOllamaAvailability = onCheckOllamaAvailability
         )

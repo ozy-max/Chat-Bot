@@ -131,6 +131,8 @@ def chat():
         "model": "llama3",  // опционально
         "temperature": 0.7,  // опционально
         "max_tokens": 2048,  // опционально
+        "context_window": 4096,  // опционально
+        "system_prompt": "You are...",  // опционально
         "history": [  // опционально
             {"role": "user", "content": "..."},
             {"role": "assistant", "content": "..."}
@@ -153,15 +155,20 @@ def chat():
         model = data.get('model', DEFAULT_MODEL)
         temperature = data.get('temperature', 0.7)
         max_tokens = data.get('max_tokens', 2048)
+        context_window = data.get('context_window', 4096)
+        custom_system_prompt = data.get('system_prompt', None)
         history = data.get('history', [])
         
         if not message:
             return jsonify({'error': 'Message is required'}), 400
         
-        logger.info(f"💬 Chat request: model={model}, message_length={len(message)}")
+        logger.info(f"💬 Chat request: model={model}, message_length={len(message)}, context={context_window}")
         
-        # Системный промпт - отвечать на том же языке что и вопрос
-        system_prompt = """You are a helpful AI assistant.
+        # Системный промпт - используем кастомный или дефолтный
+        if custom_system_prompt:
+            system_prompt = custom_system_prompt
+        else:
+            system_prompt = """You are a helpful AI assistant.
 
 IMPORTANT RULE: Always respond in the SAME LANGUAGE as the user's question.
 - If the user asks in Russian, respond in Russian.
@@ -189,7 +196,8 @@ Let's begin:
             "stream": False,
             "options": {
                 "temperature": temperature,
-                "num_predict": max_tokens
+                "num_predict": max_tokens,
+                "num_ctx": context_window  # Контекстное окно
             }
         }
         

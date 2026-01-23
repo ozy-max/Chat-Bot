@@ -42,6 +42,9 @@ class ChatViewModel(
     // API клиент для удаленного Ollama сервера
     private val ollamaApiClient = com.test.chatbot.api.OllamaApiClient()
     
+    // Клиент для управления серверами
+    private val serverManagerClient = com.test.chatbot.api.ServerManagerClient()
+    
     /**
      * Проверить доступность Ollama сервера
      * Проверяет сначала API сервер, потом прямое подключение
@@ -236,6 +239,12 @@ class ChatViewModel(
                         AiProvider.CLAUDE
                     }
                     
+                    val taskType = try {
+                        PromptTemplates.TaskType.valueOf(settings.taskType)
+                    } catch (e: Exception) {
+                        PromptTemplates.TaskType.CHAT
+                    }
+                    
                     _uiState.update { 
                         it.copy(
                             apiKey = settings.claudeApiKey,
@@ -245,6 +254,9 @@ class ChatViewModel(
                             temperature = settings.temperature,
                             maxTokens = settings.maxTokens,
                             selectedProvider = provider,
+                            taskType = taskType,
+                            ollamaModel = settings.ollamaModel,
+                            contextWindow = settings.contextWindow,
                             // Не показываем диалог API ключей если ключи уже сохранены
                             showApiKeyDialog = settings.claudeApiKey.isBlank() && settings.yandexApiKey.isBlank(),
                             isSettingsLoaded = true
@@ -280,6 +292,9 @@ class ChatViewModel(
             is ChatUiEvents.UpdateTemperature -> updateTemperature(event.temperature)
             is ChatUiEvents.UpdateMaxTokens -> updateMaxTokens(event.maxTokens)
             is ChatUiEvents.UpdateProvider -> updateProvider(event.provider)
+            is ChatUiEvents.UpdateTaskType -> updateTaskType(event.taskType)
+            is ChatUiEvents.UpdateOllamaModel -> updateOllamaModel(event.model)
+            is ChatUiEvents.UpdateContextWindow -> updateContextWindow(event.contextWindow)
             is ChatUiEvents.ShowApiKeyDialog -> showApiKeyDialog()
             is ChatUiEvents.DismissApiKeyDialog -> dismissApiKeyDialog()
             is ChatUiEvents.ShowSettingsDialog -> showSettingsDialog()
@@ -540,12 +555,17 @@ class ChatViewModel(
         
         Log.i("ChatViewModel", "💬 Отправка в Ollama API: message_length=${messageWithContext.length}, history_size=${apiHistory.size}")
         
+        // Получаем системный промпт из текущего типа задачи
+        val systemPrompt = _uiState.value.taskType.systemPrompt
+        
         // Пробуем сначала API сервер
         var result = ollamaApiClient.chat(
             message = messageWithContext,
-            model = "llama3",
+            model = _uiState.value.ollamaModel,
             temperature = _uiState.value.temperature,
             maxTokens = _uiState.value.maxTokens,
+            contextWindow = _uiState.value.contextWindow,
+            systemPrompt = systemPrompt,
             history = apiHistory
         )
         
@@ -765,6 +785,30 @@ class ChatViewModel(
         }
     }
     
+    private fun updateTaskType(taskType: PromptTemplates.TaskType) {
+        _uiState.update { it.copy(taskType = taskType) }
+        // Сохраняем в DataStore
+        viewModelScope.launch {
+            preferencesRepository?.saveTaskType(taskType.name)
+        }
+    }
+    
+    private fun updateOllamaModel(model: String) {
+        _uiState.update { it.copy(ollamaModel = model) }
+        // Сохраняем в DataStore
+        viewModelScope.launch {
+            preferencesRepository?.saveOllamaModel(model)
+        }
+    }
+    
+    private fun updateContextWindow(contextWindow: Int) {
+        _uiState.update { it.copy(contextWindow = contextWindow) }
+        // Сохраняем в DataStore
+        viewModelScope.launch {
+            preferencesRepository?.saveContextWindow(contextWindow)
+        }
+    }
+    
     private fun updateApiKey(apiKey: String) {
         _uiState.update { it.copy(apiKey = apiKey) }
         // Сохраняем в DataStore
@@ -809,10 +853,46 @@ class ChatViewModel(
     }
     
     private fun updateProvider(provider: AiProvider) {
+        val previousProvider = _uiState.value.selectedProvider
         _uiState.update { it.copy(selectedProvider = provider) }
+        
         // Сохраняем в DataStore
         viewModelScope.launch {
             preferencesRepository?.saveSelectedProvider(provider.name)
+        }
+        
+        // Автоматическое управление серверами
+        viewModelScope.launch {
+            try {
+                when (provider) {
+                    AiProvider.OLLAMA -> {
+                        // Запускаем серверы при выборе Ollama
+                        if (previousProvider != AiProvider.OLLAMA) {
+                            Log.i("ChatViewModel", "🚀 Автоматический запуск Ollama серверов...")
+                            val result = serverManagerClient.startServers()
+                            if (result.isSuccess) {
+                                Log.i("ChatViewModel", "✅ Ollama серверы запущены")
+                            } else {
+                                Log.w("ChatViewModel", "⚠️ Не удалось запустить серверы: ${result.exceptionOrNull()?.message}")
+                            }
+                        }
+                    }
+                    else -> {
+                        // Останавливаем серверы при выборе другого провайдера
+                        if (previousProvider == AiProvider.OLLAMA) {
+                            Log.i("ChatViewModel", "🛑 Автоматическая остановка Ollama серверов...")
+                            val result = serverManagerClient.stopServers()
+                            if (result.isSuccess) {
+                                Log.i("ChatViewModel", "✅ Ollama серверы остановлены")
+                            } else {
+                                Log.w("ChatViewModel", "⚠️ Не удалось остановить серверы: ${result.exceptionOrNull()?.message}")
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ChatViewModel", "❌ Ошибка управления серверами: ${e.message}")
+            }
         }
     }
     

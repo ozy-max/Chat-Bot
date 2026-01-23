@@ -110,6 +110,8 @@ class OllamaApiClient(
      * @param model Название модели (опционально)
      * @param temperature Температура генерации (0.0-1.0)
      * @param maxTokens Максимум токенов в ответе
+     * @param contextWindow Размер контекстного окна (опционально)
+     * @param systemPrompt Системный промпт (опционально)
      * @param history История диалога (опционально)
      */
     suspend fun chat(
@@ -117,6 +119,8 @@ class OllamaApiClient(
         model: String = "llama3",
         temperature: Double = 0.7,
         maxTokens: Int = 2048,
+        contextWindow: Int = 4096,
+        systemPrompt: String? = null,
         history: List<ChatMessage> = emptyList()
     ): Result<ChatResponse> = withContext(Dispatchers.IO) {
         try {
@@ -125,6 +129,8 @@ class OllamaApiClient(
                 model = model,
                 temperature = temperature,
                 maxTokens = maxTokens,
+                contextWindow = contextWindow,
+                systemPrompt = systemPrompt,
                 history = history
             )
             
@@ -181,6 +187,8 @@ class OllamaApiClient(
         @SerializedName("model") val model: String = "llama3",
         @SerializedName("temperature") val temperature: Double = 0.7,
         @SerializedName("max_tokens") val maxTokens: Int = 2048,
+        @SerializedName("context_window") val contextWindow: Int = 4096,
+        @SerializedName("system_prompt") val systemPrompt: String? = null,
         @SerializedName("history") val history: List<ChatMessage> = emptyList()
     )
     

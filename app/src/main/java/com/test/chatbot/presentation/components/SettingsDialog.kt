@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
@@ -22,6 +24,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.test.chatbot.models.AiProvider
+import com.test.chatbot.models.PromptTemplates
 import com.test.chatbot.ui.theme.AccentYellow
 import com.test.chatbot.ui.theme.PureBlack
 import kotlinx.coroutines.launch
@@ -32,9 +35,15 @@ fun SettingsDialog(
     currentTemperature: Double,
     currentMaxTokens: Int,
     currentProvider: AiProvider,
+    currentTaskType: PromptTemplates.TaskType = PromptTemplates.TaskType.CHAT,
+    currentOllamaModel: String = "llama3:latest",
+    currentContextWindow: Int = 4096,
     onTemperatureChange: (Double) -> Unit,
     onMaxTokensChange: (Int) -> Unit,
     onProviderChange: (AiProvider) -> Unit,
+    onTaskTypeChange: (PromptTemplates.TaskType) -> Unit = {},
+    onOllamaModelChange: (String) -> Unit = {},
+    onContextWindowChange: (Int) -> Unit = {},
     onDismiss: () -> Unit,
     onCheckOllamaAvailability: (suspend () -> Boolean)? = null,
     modifier: Modifier = Modifier
@@ -42,8 +51,12 @@ fun SettingsDialog(
     var temperature by remember { mutableFloatStateOf(currentTemperature.toFloat()) }
     var maxTokens by remember { mutableIntStateOf(currentMaxTokens) }
     var selectedProvider by remember { mutableStateOf(currentProvider) }
+    var selectedTaskType by remember { mutableStateOf(currentTaskType) }
+    var selectedOllamaModel by remember { mutableStateOf(currentOllamaModel) }
+    var selectedContextWindow by remember { mutableIntStateOf(currentContextWindow) }
     var showOllamaUnavailableDialog by remember { mutableStateOf(false) }
     var isCheckingOllama by remember { mutableStateOf(false) }
+    var showAdvancedSettings by remember { mutableStateOf(false) }
     
     val coroutineScope = rememberCoroutineScope()
     
@@ -86,6 +99,7 @@ fun SettingsDialog(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
                     .padding(20.dp)
             ) {
                 // Заголовок
@@ -420,6 +434,133 @@ fun SettingsDialog(
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
+                // Расширенные настройки для Ollama
+                if (selectedProvider == AiProvider.OLLAMA) {
+                    GradientDivider()
+                    
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    // Заголовок с возможностью свернуть/развернуть
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { showAdvancedSettings = !showAdvancedSettings }
+                            .padding(vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        SectionTitle(icon = "⚙️", title = "Расширенные настройки")
+                        Text(
+                            text = if (showAdvancedSettings) "▼" else "▶",
+                            fontSize = 14.sp,
+                            color = AccentYellow
+                        )
+                    }
+                    
+                    if (showAdvancedSettings) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Тип задачи (Prompt Template)
+                        SectionTitle(icon = "🎯", title = "Тип задачи")
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = "Выберите тип задачи для оптимизации промпта",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Сетка для типов задач
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PromptTemplates.TaskType.values().toList().chunked(2).forEach { row ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    row.forEach { taskType ->
+                                        TaskTypeChip(
+                                            taskType = taskType,
+                                            isSelected = selectedTaskType == taskType,
+                                            onClick = {
+                                                selectedTaskType = taskType
+                                                // Автоматически применяем рекомендованные параметры
+                                                temperature = taskType.recommendedTemperature.toFloat()
+                                                maxTokens = taskType.recommendedMaxTokens
+                                                selectedContextWindow = taskType.recommendedContextWindow
+                                            },
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(20.dp))
+                        
+                        // Выбор модели
+                        SectionTitle(icon = "🦙", title = "Модель")
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = "Квантование влияет на размер и скорость",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PromptTemplates.AVAILABLE_MODELS.forEach { modelConfig ->
+                                ModelSelectionChip(
+                                    modelConfig = modelConfig,
+                                    isSelected = selectedOllamaModel == modelConfig.modelName,
+                                    onClick = { selectedOllamaModel = modelConfig.modelName }
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(20.dp))
+                        
+                        // Контекстное окно
+                        SectionTitle(icon = "📖", title = "Контекстное окно")
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Text(
+                            text = "Больше контекст = больше памяти, но медленнее",
+                            fontSize = 12.sp,
+                            color = Color.White.copy(alpha = 0.6f)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            PromptTemplates.CONTEXT_WINDOW_OPTIONS.forEach { (size, label) ->
+                                ContextWindowChip(
+                                    size = size,
+                                    label = label,
+                                    isSelected = selectedContextWindow == size,
+                                    onClick = { selectedContextWindow = size },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
+                }
+                
                 // Кнопки
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -445,6 +586,9 @@ fun SettingsDialog(
                             onTemperatureChange(roundedTemp)
                             onMaxTokensChange(maxTokens)
                             onProviderChange(selectedProvider)
+                            onTaskTypeChange(selectedTaskType)
+                            onOllamaModelChange(selectedOllamaModel)
+                            onContextWindowChange(selectedContextWindow)
                             onDismiss()
                         },
                         modifier = Modifier
@@ -617,6 +761,164 @@ private fun QuickTokenButton(
             fontWeight = FontWeight.Bold,
             color = if (isSelected) PureBlack else Color.White.copy(alpha = 0.7f)
         )
+    }
+}
+
+@Composable
+private fun TaskTypeChip(
+    taskType: PromptTemplates.TaskType,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (isSelected) {
+                    Modifier
+                        .background(AccentYellow.copy(alpha = 0.15f))
+                        .border(1.5.dp, AccentYellow, RoundedCornerShape(12.dp))
+                } else {
+                    Modifier
+                        .background(Color(0xFF0D0D0D))
+                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(12.dp))
+                }
+            )
+            .clickable { onClick() }
+            .padding(12.dp)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = taskType.icon,
+                fontSize = 24.sp
+            )
+            Text(
+                text = taskType.displayName,
+                fontSize = 12.sp,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                color = if (isSelected) AccentYellow else Color.White.copy(alpha = 0.7f),
+                maxLines = 2
+            )
+        }
+    }
+}
+
+@Composable
+private fun ModelSelectionChip(
+    modelConfig: PromptTemplates.ModelConfig,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .then(
+                if (isSelected) {
+                    Modifier
+                        .background(AccentYellow.copy(alpha = 0.15f))
+                        .border(1.5.dp, AccentYellow, RoundedCornerShape(12.dp))
+                } else {
+                    Modifier
+                        .background(Color(0xFF0D0D0D))
+                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(12.dp))
+                }
+            )
+            .clickable { onClick() }
+            .padding(14.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = modelConfig.displayName,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) AccentYellow else Color.White
+                    )
+                    
+                    // Бейдж для квантования
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(Color(0xFF1A1A1A))
+                            .border(1.dp, Color(0xFF333333), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = modelConfig.quantization,
+                            fontSize = 10.sp,
+                            color = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = modelConfig.description,
+                    fontSize = 11.sp,
+                    color = Color.White.copy(alpha = 0.5f)
+                )
+                
+                Text(
+                    text = "${modelConfig.approximateSize} • Скорость: ${"⚡".repeat(modelConfig.speedRating)}",
+                    fontSize = 10.sp,
+                    color = Color.White.copy(alpha = 0.4f)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContextWindowChip(
+    size: Int,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .then(
+                if (isSelected) {
+                    Modifier
+                        .background(AccentYellow)
+                } else {
+                    Modifier
+                        .background(Color(0xFF1A1A1A))
+                        .border(1.dp, Color(0xFF333333), RoundedCornerShape(10.dp))
+                }
+            )
+            .clickable { onClick() }
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = label,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Bold,
+                color = if (isSelected) PureBlack else Color.White.copy(alpha = 0.7f)
+            )
+        }
     }
 }
 

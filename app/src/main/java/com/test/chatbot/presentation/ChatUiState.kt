@@ -6,6 +6,7 @@ import com.test.chatbot.models.CompressionSettings
 import com.test.chatbot.models.CompressionState
 import com.test.chatbot.models.Message
 import com.test.chatbot.models.ModelComparisonResult
+import com.test.chatbot.models.PromptTemplates
 import com.test.chatbot.models.TokenStats
 
 data class ChatUiState(
@@ -21,6 +22,11 @@ data class ChatUiState(
     val maxTokens: Int = 4096, // Максимальное количество токенов для ответа
     val showSettingsDialog: Boolean = false,
     val selectedProvider: AiProvider = AiProvider.CLAUDE,
+    
+    // Расширенные настройки LLM (для Ollama)
+    val taskType: PromptTemplates.TaskType = PromptTemplates.TaskType.CHAT,
+    val ollamaModel: String = "llama3:latest",
+    val contextWindow: Int = 4096,
     
     // Состояние загрузки настроек из DataStore
     val isSettingsLoaded: Boolean = false,

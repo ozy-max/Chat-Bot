@@ -33,6 +33,10 @@ class PreferencesRepository(private val context: Context) {
         private val MEMORY_ENABLED = booleanPreferencesKey("memory_enabled")
         // Pending messages для восстановления после kill
         private val PENDING_USER_MESSAGES = stringPreferencesKey("pending_user_messages")
+        // Расширенные настройки LLM
+        private val TASK_TYPE = stringPreferencesKey("task_type")
+        private val OLLAMA_MODEL = stringPreferencesKey("ollama_model")
+        private val CONTEXT_WINDOW = intPreferencesKey("context_window")
     }
     
     /**
@@ -45,7 +49,10 @@ class PreferencesRepository(private val context: Context) {
         val todoistToken: String = "",
         val temperature: Double = 0.7,
         val selectedProvider: String = "CLAUDE",
-        val maxTokens: Int = 4096
+        val maxTokens: Int = 4096,
+        val taskType: String = "CHAT",
+        val ollamaModel: String = "llama3:latest",
+        val contextWindow: Int = 4096
     )
     
     /**
@@ -59,7 +66,10 @@ class PreferencesRepository(private val context: Context) {
             todoistToken = preferences[TODOIST_TOKEN] ?: "",
             temperature = preferences[TEMPERATURE] ?: 0.7,
             selectedProvider = preferences[SELECTED_PROVIDER] ?: "CLAUDE",
-            maxTokens = preferences[MAX_TOKENS] ?: 4096
+            maxTokens = preferences[MAX_TOKENS] ?: 4096,
+            taskType = preferences[TASK_TYPE] ?: "CHAT",
+            ollamaModel = preferences[OLLAMA_MODEL] ?: "llama3:latest",
+            contextWindow = preferences[CONTEXT_WINDOW] ?: 4096
         )
     }
     
@@ -192,6 +202,33 @@ class PreferencesRepository(private val context: Context) {
     suspend fun clearPendingUserMessages() {
         context.dataStore.edit { preferences ->
             preferences.remove(PENDING_USER_MESSAGES)
+        }
+    }
+    
+    /**
+     * Сохранить тип задачи (TaskType)
+     */
+    suspend fun saveTaskType(taskType: String) {
+        context.dataStore.edit { preferences ->
+            preferences[TASK_TYPE] = taskType
+        }
+    }
+    
+    /**
+     * Сохранить модель Ollama
+     */
+    suspend fun saveOllamaModel(model: String) {
+        context.dataStore.edit { preferences ->
+            preferences[OLLAMA_MODEL] = model
+        }
+    }
+    
+    /**
+     * Сохранить размер контекстного окна
+     */
+    suspend fun saveContextWindow(contextWindow: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[CONTEXT_WINDOW] = contextWindow
         }
     }
 }

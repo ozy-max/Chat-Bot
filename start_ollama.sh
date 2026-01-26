@@ -86,8 +86,15 @@ if curl -s http://localhost:11434/api/tags > /dev/null; then
     
     # Настройка ADB reverse для эмулятора
     echo "🔧 Настройка ADB reverse для эмулятора..."
+    ADB_PATH=""
     if command -v adb &> /dev/null; then
-        adb reverse tcp:11434 tcp:11434 2>/dev/null && echo "✅ ADB reverse настроен (localhost:11434)" || echo "⚠️  ADB reverse не настроен (эмулятор не запущен?)"
+        ADB_PATH="adb"
+    elif [ -f "$HOME/Library/Android/sdk/platform-tools/adb" ]; then
+        ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb"
+    fi
+    
+    if [ -n "$ADB_PATH" ]; then
+        $ADB_PATH reverse tcp:11434 tcp:11434 2>/dev/null && echo "✅ ADB reverse настроен (localhost:11434)" || echo "⚠️  ADB reverse не настроен (эмулятор не запущен?)"
     else
         echo "⚠️  ADB не найден (установите Android SDK)"
     fi

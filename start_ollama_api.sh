@@ -107,10 +107,17 @@ echo -e "${YELLOW}⏹  Остановка: Ctrl+C${NC}"
 echo ""
 
 # 8. Настройка ADB reverse для эмулятора (опционально)
+ADB_PATH=""
 if command -v adb &> /dev/null; then
-    if adb devices 2>/dev/null | grep -q "device$"; then
+    ADB_PATH="adb"
+elif [ -f "$HOME/Library/Android/sdk/platform-tools/adb" ]; then
+    ADB_PATH="$HOME/Library/Android/sdk/platform-tools/adb"
+fi
+
+if [ -n "$ADB_PATH" ]; then
+    if $ADB_PATH devices 2>/dev/null | grep -q "device$"; then
         echo "🔧 Настройка ADB reverse..."
-        adb reverse tcp:$PORT tcp:$PORT 2>/dev/null && echo -e "${GREEN}✅ ADB reverse настроен (localhost:$PORT работает в эмуляторе)${NC}" || echo -e "${YELLOW}⚠️  ADB reverse не удался${NC}"
+        $ADB_PATH reverse tcp:$PORT tcp:$PORT 2>/dev/null && echo -e "${GREEN}✅ ADB reverse настроен (localhost:$PORT работает в эмуляторе)${NC}" || echo -e "${YELLOW}⚠️  ADB reverse не удался${NC}"
         echo ""
     fi
 fi

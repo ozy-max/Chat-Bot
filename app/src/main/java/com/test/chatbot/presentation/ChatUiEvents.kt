@@ -47,5 +47,11 @@ sealed interface ChatUiEvents {
     
     // Lifecycle события
     data object OnAppPause : ChatUiEvents // Сохранить summary при уходе в фон
+    
+    // Анализ данных
+    data object ShowDataAnalysisPanel : ChatUiEvents
+    data object DismissDataAnalysisPanel : ChatUiEvents
+    data class AnalyzeFile(val uri: android.net.Uri) : ChatUiEvents
+    data class AskDataQuestion(val question: String) : ChatUiEvents
 }
 

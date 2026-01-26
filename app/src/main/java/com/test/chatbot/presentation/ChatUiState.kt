@@ -54,5 +54,10 @@ data class ChatUiState(
     
     // MCP
     val mcpServerUrl: String = "http://localhost:3000/mcp", // Встроенный сервер
-    val summaryIntervalMinutes: Int = 30 // Периодичность уведомлений в минутах (по умолчанию 30 минут)
+    val summaryIntervalMinutes: Int = 30, // Периодичность уведомлений в минутах (по умолчанию 30 минут)
+    
+    // Анализ данных
+    val showDataAnalysisPanel: Boolean = false,
+    val currentDataAnalysis: com.test.chatbot.data.DataAnalyzer.AnalysisResult? = null,
+    val isAnalyzingFile: Boolean = false
 )

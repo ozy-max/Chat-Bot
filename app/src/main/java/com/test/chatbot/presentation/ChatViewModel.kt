@@ -325,6 +325,12 @@ class ChatViewModel(
             
             // Lifecycle
             is ChatUiEvents.OnAppPause -> onAppPause()
+            
+            // Анализ данных
+            is ChatUiEvents.ShowDataAnalysisPanel -> showDataAnalysisPanel()
+            is ChatUiEvents.DismissDataAnalysisPanel -> dismissDataAnalysisPanel()
+            is ChatUiEvents.AnalyzeFile -> analyzeFile(event.uri)
+            is ChatUiEvents.AskDataQuestion -> askDataQuestion(event.question)
         }
     }
     
@@ -3319,6 +3325,134 @@ class ChatViewModel(
             sorted.joinToString("\n")
         } else {
             "   Нет задач для приоритизации"
+        }
+    }
+    
+    // ==================== Анализ данных (CSV, JSON, LOG) ====================
+    
+    private val dataAnalyzer = com.test.chatbot.data.DataAnalyzer(context)
+    
+    /**
+     * Показать панель анализа данных
+     */
+    private fun showDataAnalysisPanel() {
+        _uiState.update { it.copy(showDataAnalysisPanel = true) }
+    }
+    
+    /**
+     * Скрыть панель анализа данных
+     */
+    private fun dismissDataAnalysisPanel() {
+        _uiState.update { 
+            it.copy(
+                showDataAnalysisPanel = false,
+                currentDataAnalysis = null
+            ) 
+        }
+    }
+    
+    /**
+     * Анализировать файл
+     */
+    private fun analyzeFile(uri: android.net.Uri) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isAnalyzingFile = true) }
+            
+            try {
+                val result = dataAnalyzer.analyzeFile(uri)
+                
+                if (result.isSuccess) {
+                    val analysisResult = result.getOrNull()
+                    _uiState.update { 
+                        it.copy(
+                            currentDataAnalysis = analysisResult,
+                            isAnalyzingFile = false
+                        ) 
+                    }
+                    
+                    Log.i("ChatViewModel", "✅ Файл проанализирован: ${analysisResult?.fileType}, ${analysisResult?.rowCount} строк")
+                } else {
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Ошибка анализа файла"
+                    _uiState.update { 
+                        it.copy(
+                            isAnalyzingFile = false,
+                            error = errorMsg
+                        ) 
+                    }
+                    Log.e("ChatViewModel", "❌ Ошибка анализа файла: $errorMsg")
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isAnalyzingFile = false,
+                        error = "Ошибка анализа файла: ${e.message}"
+                    ) 
+                }
+                Log.e("ChatViewModel", "❌ Исключение при анализе файла: ${e.message}", e)
+            }
+        }
+    }
+    
+    /**
+     * Задать вопрос по данным
+     */
+    private fun askDataQuestion(question: String) {
+        val currentAnalysis = _uiState.value.currentDataAnalysis ?: return
+        
+        // Формируем аналитический промпт
+        val analyticalPrompt = dataAnalyzer.createAnalyticalPrompt(currentAnalysis, question)
+        
+        // Добавляем сообщение пользователя в UI
+        val userMsg = Message(text = question, isUser = true)
+        _uiState.update { it.copy(messages = it.messages + userMsg) }
+        
+        // Переключаемся на тип задачи "Анализ данных" если еще не переключились
+        if (_uiState.value.taskType != PromptTemplates.TaskType.DATA_ANALYSIS) {
+            updateTaskType(PromptTemplates.TaskType.DATA_ANALYSIS)
+        }
+        
+        // Отправляем запрос к Ollama
+        _uiState.update { it.copy(isLoading = true) }
+        viewModelScope.launch {
+            try {
+                // Используем Ollama для анализа (только локально!)
+                if (_uiState.value.selectedProvider != AiProvider.OLLAMA) {
+                    // Временно переключаемся на Ollama для анализа данных
+                    val originalProvider = _uiState.value.selectedProvider
+                    updateProvider(AiProvider.OLLAMA)
+                    
+                    // Добавляем в историю Ollama
+                    ollamaHistory.add(Pair("user", analyticalPrompt))
+                    
+                    // Отправляем в Ollama
+                    sendToOllama()
+                    
+                    // Возвращаем исходный провайдер (если нужно)
+                    // updateProvider(originalProvider)
+                } else {
+                    // Уже используем Ollama
+                    ollamaHistory.add(Pair("user", analyticalPrompt))
+                    sendToOllama()
+                }
+                
+                _uiState.update { it.copy(isLoading = false) }
+                
+            } catch (e: Exception) {
+                val errorMessage = "Ошибка анализа: ${e.message}"
+                val errorMsg = Message(
+                    text = errorMessage,
+                    isUser = false,
+                    provider = _uiState.value.selectedProvider
+                )
+                _uiState.update { 
+                    it.copy(
+                        messages = it.messages + errorMsg, 
+                        isLoading = false,
+                        error = errorMessage
+                    ) 
+                }
+                Log.e("ChatViewModel", "❌ Ошибка анализа данных: ${e.message}", e)
+            }
         }
     }
 }

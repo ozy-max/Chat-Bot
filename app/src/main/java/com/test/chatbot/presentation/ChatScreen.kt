@@ -282,6 +282,18 @@ fun ChatScreen(
                                 hasSavedMemory = uiState.memoryState.hasSummary,
                                 onClick = { onUiEvent(ChatUiEvents.ShowAiFeaturesSheet) }
                             )
+                            // Кнопка анализа данных
+                            DataAnalysisButton(
+                                isActive = uiState.showDataAnalysisPanel,
+                                hasData = uiState.currentDataAnalysis != null,
+                                onClick = { 
+                                    if (uiState.showDataAnalysisPanel) {
+                                        onUiEvent(ChatUiEvents.DismissDataAnalysisPanel)
+                                    } else {
+                                        onUiEvent(ChatUiEvents.ShowDataAnalysisPanel)
+                                    }
+                                }
+                            )
                             SmallActionButton(
                                 icon = Icons.Default.Compare,
                                 tint = AccentYellow,
@@ -375,6 +387,15 @@ fun ChatScreen(
                     )
                 }
             }
+            
+            // Панель анализа данных
+            com.test.chatbot.presentation.components.DataAnalysisPanel(
+                isVisible = uiState.showDataAnalysisPanel,
+                currentAnalysis = uiState.currentDataAnalysis,
+                onFileSelected = { uri -> onUiEvent(ChatUiEvents.AnalyzeFile(uri)) },
+                onClose = { onUiEvent(ChatUiEvents.DismissDataAnalysisPanel) },
+                onAskQuestion = { question -> onUiEvent(ChatUiEvents.AskDataQuestion(question)) }
+            )
             
             // Поле ввода сообщения
             Surface(
@@ -486,6 +507,50 @@ private fun AiFeaturesButton(
             ) {
                 Text(
                     text = "💾",
+                    fontSize = 8.sp
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DataAnalysisButton(
+    isActive: Boolean,
+    hasData: Boolean,
+    onClick: () -> Unit
+) {
+    Box {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .clip(CircleShape)
+                .background(
+                    if (isActive)
+                        Color(0xFF2196F3).copy(alpha = 0.2f)
+                    else
+                        Color(0xFF1A1A1A)
+                )
+                .clickable { onClick() },
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = "📊",
+                fontSize = 18.sp,
+                color = if (isActive) Color(0xFF2196F3) else Color.White.copy(alpha = 0.7f)
+            )
+        }
+        
+        // Badge если есть загруженные данные
+        if (hasData) {
+            Badge(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 4.dp, y = (-4).dp),
+                containerColor = Color(0xFF4CAF50)
+            ) {
+                Text(
+                    text = "✓",
                     fontSize = 8.sp
                 )
             }

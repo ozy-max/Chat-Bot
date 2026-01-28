@@ -53,5 +53,12 @@ sealed interface ChatUiEvents {
     data object DismissDataAnalysisPanel : ChatUiEvents
     data class AnalyzeFile(val uri: android.net.Uri) : ChatUiEvents
     data class AskDataQuestion(val question: String) : ChatUiEvents
+    
+    // Голосовой ввод
+    data object StartVoiceInput : ChatUiEvents
+    data object StopVoiceInput : ChatUiEvents
+    data class OnVoiceInputResult(val text: String) : ChatUiEvents
+    data class OnVoiceInputError(val error: String) : ChatUiEvents
+    data object DismissVoiceInputError : ChatUiEvents
 }
 

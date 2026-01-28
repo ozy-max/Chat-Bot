@@ -10,6 +10,7 @@ import com.test.chatbot.data.memory.MemoryState
 import com.test.chatbot.models.*
 import com.test.chatbot.rag.OllamaClient
 import com.test.chatbot.repository.ChatRepository
+import com.test.chatbot.speech.SpeechRecognitionService
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,6 +19,9 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.onEach
 
 class ChatViewModel(
     private val context: Context,
@@ -83,6 +87,10 @@ class ChatViewModel(
     // MCP клиент и инструменты
     private var mcpClient: com.test.chatbot.mcp.McpClient? = null
     private var mcpTools = listOf<com.test.chatbot.mcp.McpTool>()
+    
+    // Сервис распознавания речи
+    private val speechRecognitionService = SpeechRecognitionService(context)
+    private var speechRecognitionJob: Job? = null
     
     init {
         loadSavedSettings()
@@ -331,6 +339,13 @@ class ChatViewModel(
             is ChatUiEvents.DismissDataAnalysisPanel -> dismissDataAnalysisPanel()
             is ChatUiEvents.AnalyzeFile -> analyzeFile(event.uri)
             is ChatUiEvents.AskDataQuestion -> askDataQuestion(event.question)
+            
+            // Голосовой ввод
+            is ChatUiEvents.StartVoiceInput -> startVoiceInput()
+            is ChatUiEvents.StopVoiceInput -> stopVoiceInput()
+            is ChatUiEvents.OnVoiceInputResult -> onVoiceInputResult(event.text)
+            is ChatUiEvents.OnVoiceInputError -> onVoiceInputError(event.error)
+            is ChatUiEvents.DismissVoiceInputError -> dismissVoiceInputError()
         }
     }
     
@@ -3454,5 +3469,179 @@ class ChatViewModel(
                 Log.e("ChatViewModel", "❌ Ошибка анализа данных: ${e.message}", e)
             }
         }
+    }
+    
+    // ============================================
+    // VOICE INPUT (SPEECH TO TEXT)
+    // ============================================
+    
+    /**
+     * Запустить распознавание речи
+     */
+    private fun startVoiceInput() {
+        Log.d("ChatViewModel", "🎤 Starting voice input...")
+        
+        // Проверяем доступность
+        if (!speechRecognitionService.isAvailable()) {
+            val errorMsg = "Распознавание речи недоступно на этом устройстве. " +
+                "На эмуляторе используйте реальное устройство или введите текст вручную."
+            Log.e("ChatViewModel", "❌ $errorMsg")
+            _uiState.update { 
+                it.copy(
+                    voiceInputError = errorMsg
+                ) 
+            }
+            return
+        }
+        
+        Log.d("ChatViewModel", "✅ Speech recognition is available")
+        
+        // Останавливаем предыдущую сессию если есть
+        stopVoiceInput()
+        
+        // Обновляем состояние
+        _uiState.update { 
+            it.copy(
+                isListening = true,
+                voiceInputText = "",
+                voiceInputError = null
+            ) 
+        }
+        
+        // Запускаем распознавание
+        speechRecognitionJob = viewModelScope.launch {
+            speechRecognitionService.startListening()
+                .catch { error ->
+                    Log.e("ChatViewModel", "Speech recognition error: ${error.message}")
+                    _uiState.update { 
+                        it.copy(
+                            isListening = false,
+                            voiceInputError = "Ошибка распознавания: ${error.message}"
+                        ) 
+                    }
+                }
+                .collect { result ->
+                    when (result) {
+                        is SpeechRecognitionService.RecognitionResult.Success -> {
+                            Log.d("ChatViewModel", "✅ Voice recognition success: ${result.text}")
+                            _uiState.update { 
+                                it.copy(
+                                    isListening = false,
+                                    voiceInputText = result.text
+                                ) 
+                            }
+                            // Автоматически отправляем распознанный текст в LLM
+                            sendMessage(result.text)
+                        }
+                        
+                        is SpeechRecognitionService.RecognitionResult.PartialResult -> {
+                            Log.d("ChatViewModel", "📝 Partial result: ${result.text}")
+                            _uiState.update { 
+                                it.copy(voiceInputText = "🎤 ${result.text}...") 
+                            }
+                        }
+                        
+                        is SpeechRecognitionService.RecognitionResult.Error -> {
+                            Log.e("ChatViewModel", "❌ Voice recognition error: ${result.error}")
+                            val enhancedError = if (result.error.contains("не обнаружена речь", ignoreCase = true) ||
+                                                    result.error.contains("не удалось распознать", ignoreCase = true) ||
+                                                    result.error.contains("ERROR_NO_MATCH", ignoreCase = true) ||
+                                                    result.error.contains("ERROR_SPEECH_TIMEOUT", ignoreCase = true)) {
+                                "${result.error}\n\n💡 Совет:\n" +
+                                "• На эмуляторе распознавание может не работать\n" +
+                                "• Убедитесь что микрофон включен\n" +
+                                "• Используйте реальное устройство для лучших результатов\n" +
+                                "• Говорите четко и громко"
+                            } else {
+                                result.error
+                            }
+                            _uiState.update { 
+                                it.copy(
+                                    isListening = false,
+                                    voiceInputError = enhancedError,
+                                    voiceInputText = ""
+                                ) 
+                            }
+                        }
+                        
+                        is SpeechRecognitionService.RecognitionResult.ReadyForSpeech -> {
+                            Log.d("ChatViewModel", "🎤 Ready for speech - START SPEAKING NOW!")
+                            _uiState.update { 
+                                it.copy(voiceInputText = "🎤 Готов к записи. Говорите!") 
+                            }
+                        }
+                        
+                        is SpeechRecognitionService.RecognitionResult.BeginningOfSpeech -> {
+                            Log.d("ChatViewModel", "🗣️ Speech detected!")
+                            _uiState.update { 
+                                it.copy(voiceInputText = "🗣️ Слушаю...") 
+                            }
+                        }
+                        
+                        is SpeechRecognitionService.RecognitionResult.EndOfSpeech -> {
+                            Log.d("ChatViewModel", "🎤 Speech ended - processing...")
+                            _uiState.update { 
+                                it.copy(voiceInputText = "⏳ Обработка...") 
+                            }
+                        }
+                    }
+                }
+        }
+    }
+    
+    /**
+     * Остановить распознавание речи
+     */
+    private fun stopVoiceInput() {
+        speechRecognitionJob?.cancel()
+        speechRecognitionJob = null
+        speechRecognitionService.stopListening()
+        _uiState.update { it.copy(isListening = false) }
+        Log.d("ChatViewModel", "🛑 Voice input stopped")
+    }
+    
+    /**
+     * Обработка результата распознавания речи
+     */
+    private fun onVoiceInputResult(text: String) {
+        Log.d("ChatViewModel", "Voice input result: $text")
+        _uiState.update { 
+            it.copy(
+                voiceInputText = text,
+                isListening = false
+            ) 
+        }
+        // Отправляем распознанный текст в LLM
+        sendMessage(text)
+    }
+    
+    /**
+     * Обработка ошибки распознавания речи
+     */
+    private fun onVoiceInputError(error: String) {
+        Log.e("ChatViewModel", "Voice input error: $error")
+        _uiState.update { 
+            it.copy(
+                voiceInputError = error,
+                isListening = false
+            ) 
+        }
+    }
+    
+    /**
+     * Скрыть сообщение об ошибке голосового ввода
+     */
+    private fun dismissVoiceInputError() {
+        _uiState.update { it.copy(voiceInputError = null) }
+    }
+    
+    /**
+     * Освобождение ресурсов при уничтожении ViewModel
+     */
+    override fun onCleared() {
+        super.onCleared()
+        stopVoiceInput()
+        speechRecognitionService.release()
+        Log.d("ChatViewModel", "ViewModel cleared, speech recognition released")
     }
 }

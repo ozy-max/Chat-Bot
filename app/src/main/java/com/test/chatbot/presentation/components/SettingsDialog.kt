@@ -477,7 +477,7 @@ fun SettingsDialog(
                         Column(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            PromptTemplates.TaskType.values().toList().chunked(2).forEach { row ->
+                            PromptTemplates.TaskType.entries.chunked(2).forEach { row ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)

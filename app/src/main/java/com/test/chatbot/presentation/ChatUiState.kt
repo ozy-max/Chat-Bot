@@ -59,5 +59,10 @@ data class ChatUiState(
     // Анализ данных
     val showDataAnalysisPanel: Boolean = false,
     val currentDataAnalysis: com.test.chatbot.data.DataAnalyzer.AnalysisResult? = null,
-    val isAnalyzingFile: Boolean = false
+    val isAnalyzingFile: Boolean = false,
+    
+    // Голосовой ввод
+    val isListening: Boolean = false,
+    val voiceInputText: String = "",
+    val voiceInputError: String? = null
 )

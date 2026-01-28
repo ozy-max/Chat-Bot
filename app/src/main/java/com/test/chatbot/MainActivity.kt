@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,6 +46,17 @@ class MainActivity : ComponentActivity() {
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
+        Log.d("MainActivity", "Notification permission: $isGranted")
+    }
+    
+    // Launcher для запроса разрешения на запись аудио (для голосового ввода)
+    private val audioPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        Log.d("MainActivity", "Audio permission: $isGranted")
+        if (!isGranted) {
+            // Можно показать Snackbar с объяснением
+        }
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -59,6 +71,12 @@ class MainActivity : ComponentActivity() {
                 != PackageManager.PERMISSION_GRANTED) {
                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
+        }
+        
+        // Запрашиваем разрешение на запись аудио для голосового ввода
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) 
+            != PackageManager.PERMISSION_GRANTED) {
+            audioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
         
         // Используем Factory для передачи PreferencesRepository

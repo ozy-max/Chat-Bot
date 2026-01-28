@@ -14,8 +14,10 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Compare
 import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.SupportAgent
 import androidx.compose.material3.*
 import androidx.compose.material3.FabPosition
@@ -174,6 +176,20 @@ fun ChatScreen(
             text = { Text(error) },
             confirmButton = {
                 TextButton(onClick = { onUiEvent(ChatUiEvents.DismissError) }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+    
+    // Диалог ошибки голосового ввода
+    uiState.voiceInputError?.let { error ->
+        AlertDialog(
+            onDismissRequest = { onUiEvent(ChatUiEvents.DismissVoiceInputError) },
+            title = { Text("Ошибка голосового ввода") },
+            text = { Text(error) },
+            confirmButton = {
+                TextButton(onClick = { onUiEvent(ChatUiEvents.DismissVoiceInputError) }) {
                     Text("OK")
                 }
             }
@@ -410,28 +426,65 @@ fun ChatScreen(
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     OutlinedTextField(
-                        value = messageText,
+                        value = if (uiState.isListening) uiState.voiceInputText else messageText,
                         onValueChange = { messageText = it },
                         modifier = Modifier.weight(1f),
                         placeholder = { 
                             Text(
-                                "Введите сообщение...",
+                                if (uiState.isListening) "Говорите..." else "Введите сообщение...",
                                 color = Color.White.copy(alpha = 0.3f)
                             ) 
                         },
-                        enabled = !uiState.isLoading,
+                        enabled = !uiState.isLoading && !uiState.isListening,
                         shape = RoundedCornerShape(20.dp),
                         maxLines = 4,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentYellow,
-                            unfocusedBorderColor = Color(0xFF333333),
+                            focusedBorderColor = if (uiState.isListening) Color(0xFFFF5252) else AccentYellow,
+                            unfocusedBorderColor = if (uiState.isListening) Color(0xFFFF5252) else Color(0xFF333333),
                             focusedContainerColor = Color(0xFF0D0D0D),
                             unfocusedContainerColor = Color(0xFF0D0D0D),
+                            disabledContainerColor = if (uiState.isListening) Color(0xFF1A0D0D) else Color(0xFF0D0D0D),
                             cursorColor = AccentYellow,
                             focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White
+                            unfocusedTextColor = Color.White,
+                            disabledTextColor = if (uiState.isListening) Color.White.copy(alpha = 0.7f) else Color.White.copy(alpha = 0.5f)
                         )
                     )
+                    
+                    // Кнопка голосового ввода (микрофон)
+                    Box(
+                        modifier = Modifier
+                            .size(52.dp)
+                            .clip(CircleShape)
+                            .background(
+                                when {
+                                    uiState.isListening -> Color(0xFFFF5252) // Красный когда слушает
+                                    !uiState.isLoading -> Color(0xFF2196F3) // Синий когда готов
+                                    else -> Color(0xFF2196F3).copy(alpha = 0.3f) // Прозрачный когда загружается
+                                }
+                            )
+                            .clickable(
+                                enabled = !uiState.isLoading,
+                                onClick = {
+                                    if (uiState.isListening) {
+                                        onUiEvent(ChatUiEvents.StopVoiceInput)
+                                    } else {
+                                        onUiEvent(ChatUiEvents.StartVoiceInput)
+                                    }
+                                }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (uiState.isListening) 
+                                Icons.Default.Stop
+                            else 
+                                Icons.Default.Mic,
+                            contentDescription = if (uiState.isListening) "Остановить запись" else "Голосовой ввод",
+                            tint = Color.White,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
                     
                     Box(
                         modifier = Modifier
